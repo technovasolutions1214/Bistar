@@ -30,7 +30,7 @@ importers:
         specifier: ^13.4.0
         version: 13.8.0
       next:
-        specifier: ^15.3.1
+        specifier: 15.5.15
         version: 15.5.15(@opentelemetry/api@1.9.1)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       react:
         specifier: ^19.1.0
@@ -55,7 +55,7 @@ importers:
         specifier: ^9
         version: 9.39.4(jiti@2.6.1)
       eslint-config-next:
-        specifier: ^15.3.1
+        specifier: 15.5.15
         version: 15.5.15(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
       postcss:
         specifier: ^8
@@ -88,7 +88,7 @@ importers:
         specifier: ^1.6.4
         version: 1.6.15
       next:
-        specifier: ^15.3.1
+        specifier: 15.5.15
         version: 15.5.15(@opentelemetry/api@1.9.1)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       react:
         specifier: ^19.1.0
@@ -113,7 +113,7 @@ importers:
         specifier: ^9
         version: 9.39.4(jiti@2.6.1)
       eslint-config-next:
-        specifier: ^15.3.1
+        specifier: 15.5.15
         version: 15.5.15(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
       postcss:
         specifier: ^8
