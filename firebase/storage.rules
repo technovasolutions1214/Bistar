@@ -1,0 +1,49 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ---------- Helper functions ----------
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated()
+        && (
+          request.auth.token.admin == true
+          || firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == "admin"
+        );
+    }
+
+    // ---------- Videos ----------
+    // Admins can upload, authenticated users can read/stream
+
+    match /videos/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin()
+        && request.resource.size < 5 * 1024 * 1024 * 1024; // 5 GB
+    }
+
+    // ---------- Thumbnails ----------
+    // Admins can upload, anyone can read (public)
+
+    match /thumbnails/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin()
+        && request.resource.size < 10 * 1024 * 1024 // 10 MB
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // ---------- Banners ----------
+    // Admins can upload, anyone can read (public)
+
+    match /banners/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin()
+        && request.resource.size < 10 * 1024 * 1024 // 10 MB
+        && request.resource.contentType.matches('image/.*');
+    }
+  }
+}

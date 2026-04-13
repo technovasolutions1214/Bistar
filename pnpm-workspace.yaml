@@ -1,0 +1,10 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "firebase/functions"
+onlyBuiltDependencies:
+  - "@ffmpeg-installer/darwin-arm64"
+  - "@firebase/util"
+  - protobufjs
+  - sharp
+  - unrs-resolver

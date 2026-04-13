@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NovaFlix - Firebase Setup</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0a0a0a; color: #ededed; min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .container { max-width: 700px; width: 100%; }
+  h1 { font-size: 28px; margin-bottom: 8px; }
+  h1 span { color: #e50914; }
+  .subtitle { color: #6b7280; margin-bottom: 32px; font-size: 14px; }
+
+  .step { margin-bottom: 28px; }
+  .step-header {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
+  }
+  .step-num {
+    width: 28px; height: 28px; border-radius: 50%; background: #e50914;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; flex-shrink: 0;
+  }
+  .step-title { font-size: 16px; font-weight: 600; }
+
+  .drop-zone {
+    border: 2px dashed #333; border-radius: 16px; padding: 48px 24px;
+    text-align: center; cursor: pointer; transition: all 0.2s;
+    background: #111; position: relative;
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: #e50914; background: #1a0a0b;
+  }
+  .drop-zone.success { border-color: #22c55e; background: #0a1a0e; }
+  .drop-zone.error { border-color: #ef4444; background: #1a0a0a; }
+  .drop-icon { font-size: 40px; margin-bottom: 12px; }
+  .drop-text { color: #6b7280; font-size: 14px; }
+  .drop-text strong { color: #ededed; }
+  input[type="file"] { display: none; }
+
+  .form-group { margin-bottom: 16px; }
+  .form-group label {
+    display: block; font-size: 13px; color: #6b7280; margin-bottom: 6px;
+    font-weight: 500;
+  }
+  .form-group input {
+    width: 100%; padding: 10px 14px; background: #1a1a2e; border: 1px solid #27272a;
+    border-radius: 8px; color: #ededed; font-size: 14px; font-family: monospace;
+    outline: none; transition: border-color 0.2s;
+  }
+  .form-group input:focus { border-color: #e50914; }
+  .form-group input.filled { border-color: #22c55e; }
+
+  .section-label {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
+    color: #e50914; margin: 24px 0 12px; font-weight: 600;
+  }
+
+  .btn {
+    width: 100%; padding: 14px; background: #e50914; color: white;
+    border: none; border-radius: 10px; font-size: 15px; font-weight: 600;
+    cursor: pointer; transition: background 0.2s; margin-top: 8px;
+  }
+  .btn:hover { background: #f40612; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .output-box {
+    background: #111; border: 1px solid #27272a; border-radius: 10px;
+    padding: 16px; margin-top: 16px; font-family: monospace; font-size: 12px;
+    white-space: pre-wrap; word-break: break-all; max-height: 200px;
+    overflow-y: auto; color: #22c55e; display: none;
+  }
+  .output-box.visible { display: block; }
+  .output-box.error-text { color: #ef4444; }
+
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: 11px; font-weight: 600; margin-left: 8px;
+  }
+  .badge-ok { background: #22c55e20; color: #22c55e; }
+  .badge-missing { background: #ef444420; color: #ef4444; }
+
+  .copy-btn {
+    position: absolute; top: 8px; right: 8px; background: #27272a;
+    border: none; color: #ededed; padding: 6px 12px; border-radius: 6px;
+    font-size: 12px; cursor: pointer;
+  }
+  .copy-btn:hover { background: #333; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1><span>NovaFlix</span> Firebase Setup</h1>
+  <p class="subtitle">Drop your Firebase config files to auto-fill environment variables</p>
+
+  <!-- Step 1: Service Account JSON -->
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">1</div>
+      <div class="step-title">Service Account Key <span id="sa-badge"></span></div>
+    </div>
+    <div class="drop-zone" id="sa-drop" onclick="document.getElementById('sa-file').click()">
+      <div class="drop-icon">🔑</div>
+      <div class="drop-text">
+        <strong>Drop your service account JSON file here</strong><br>
+        Firebase Console → Project Settings → Service Accounts → Generate New Private Key
+      </div>
+      <input type="file" id="sa-file" accept=".json">
+    </div>
+  </div>
+
+  <!-- Step 2: Firebase Web Config -->
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">2</div>
+      <div class="step-title">Web App Config <span id="web-badge"></span></div>
+    </div>
+    <p style="color:#6b7280; font-size:13px; margin-bottom:12px;">
+      Fill manually or paste your <code style="color:#e50914">firebaseConfig</code> object from Firebase Console → Project Settings → Your Apps
+    </p>
+
+    <div class="form-group">
+      <label>API Key</label>
+      <input type="text" id="apiKey" placeholder="AIzaSy...">
+    </div>
+    <div class="form-group">
+      <label>Auth Domain</label>
+      <input type="text" id="authDomain" placeholder="your-project.firebaseapp.com">
+    </div>
+    <div class="form-group">
+      <label>Project ID</label>
+      <input type="text" id="projectId" placeholder="your-project-id" readonly>
+    </div>
+    <div class="form-group">
+      <label>Storage Bucket</label>
+      <input type="text" id="storageBucket" placeholder="your-project.firebasestorage.app">
+    </div>
+    <div class="form-group">
+      <label>Messaging Sender ID</label>
+      <input type="text" id="messagingSenderId" placeholder="123456789">
+    </div>
+    <div class="form-group">
+      <label>App ID</label>
+      <input type="text" id="appId" placeholder="1:123456789:web:abc123">
+    </div>
+  </div>
+
+  <!-- Step 3: MSG91 (optional) -->
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">3</div>
+      <div class="step-title">MSG91 OTP <span class="badge badge-missing">optional</span></div>
+    </div>
+    <div class="form-group">
+      <label>Auth Key</label>
+      <input type="text" id="msg91AuthKey" placeholder="Your MSG91 auth key">
+    </div>
+    <div class="form-group">
+      <label>Template ID</label>
+      <input type="text" id="msg91TemplateId" placeholder="Your MSG91 template ID">
+    </div>
+  </div>
+
+  <!-- Generate -->
+  <button class="btn" id="generateBtn" onclick="generate()">Generate .env.local Files</button>
+
+  <div class="output-box" id="output" style="position:relative;"></div>
+</div>
+
+<script>
+let serviceAccountJSON = null;
+
+// Drag & Drop for Service Account
+const saDrop = document.getElementById('sa-drop');
+const saFile = document.getElementById('sa-file');
+
+['dragenter','dragover'].forEach(e => {
+  saDrop.addEventListener(e, (ev) => { ev.preventDefault(); saDrop.classList.add('dragover'); });
+});
+['dragleave','drop'].forEach(e => {
+  saDrop.addEventListener(e, () => saDrop.classList.remove('dragover'));
+});
+
+saDrop.addEventListener('drop', (ev) => {
+  ev.preventDefault();
+  const file = ev.dataTransfer.files[0];
+  if (file) handleSAFile(file);
+});
+
+saFile.addEventListener('change', (ev) => {
+  if (ev.target.files[0]) handleSAFile(ev.target.files[0]);
+});
+
+function handleSAFile(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const json = JSON.parse(e.target.result);
+
+      // Validate it looks like a service account
+      if (!json.project_id || !json.private_key || !json.client_email) {
+        throw new Error('Not a valid service account JSON');
+      }
+
+      serviceAccountJSON = json;
+
+      // Auto-fill project ID and related fields
+      document.getElementById('projectId').value = json.project_id;
+      document.getElementById('authDomain').value =
+        document.getElementById('authDomain').value || json.project_id + '.firebaseapp.com';
+      document.getElementById('storageBucket').value =
+        document.getElementById('storageBucket').value || json.project_id + '.firebasestorage.app';
+
+      // Mark fields as filled
+      document.getElementById('projectId').classList.add('filled');
+
+      saDrop.classList.add('success');
+      saDrop.querySelector('.drop-icon').textContent = '✅';
+      saDrop.querySelector('.drop-text').innerHTML =
+        '<strong>Service account loaded!</strong><br>' +
+        'Project: <code>' + json.project_id + '</code> · Client: <code>' + json.client_email + '</code>';
+
+      document.getElementById('sa-badge').innerHTML =
+        '<span class="badge badge-ok">loaded</span>';
+
+    } catch (err) {
+      saDrop.classList.add('error');
+      saDrop.querySelector('.drop-icon').textContent = '❌';
+      saDrop.querySelector('.drop-text').innerHTML =
+        '<strong>Invalid file:</strong> ' + err.message;
+      document.getElementById('sa-badge').innerHTML =
+        '<span class="badge badge-missing">error</span>';
+    }
+  };
+  reader.readAsText(file);
+}
+
+// Auto-fill hint: if user pastes firebaseConfig block
+document.addEventListener('paste', (e) => {
+  const text = e.clipboardData.getData('text');
+  // Try to parse if it looks like a firebaseConfig object
+  const match = text.match(/apiKey\s*:\s*["']([^"']+)["']/);
+  if (match) {
+    e.preventDefault();
+    const extract = (key) => {
+      const m = text.match(new RegExp(key + '\\s*:\\s*["\\x27]([^"\\x27]+)["\\x27]'));
+      return m ? m[1] : '';
+    };
+    document.getElementById('apiKey').value = extract('apiKey');
+    document.getElementById('authDomain').value = extract('authDomain');
+    document.getElementById('projectId').value = extract('projectId');
+    document.getElementById('storageBucket').value = extract('storageBucket');
+    document.getElementById('messagingSenderId').value = extract('messagingSenderId');
+    document.getElementById('appId').value = extract('appId');
+
+    // Mark all as filled
+    document.querySelectorAll('.form-group input').forEach(inp => {
+      if (inp.value) inp.classList.add('filled');
+    });
+
+    document.getElementById('web-badge').innerHTML =
+      '<span class="badge badge-ok">pasted</span>';
+  }
+});
+
+function generate() {
+  const vals = {
+    apiKey: document.getElementById('apiKey').value.trim(),
+    authDomain: document.getElementById('authDomain').value.trim(),
+    projectId: document.getElementById('projectId').value.trim(),
+    storageBucket: document.getElementById('storageBucket').value.trim(),
+    messagingSenderId: document.getElementById('messagingSenderId').value.trim(),
+    appId: document.getElementById('appId').value.trim(),
+    msg91AuthKey: document.getElementById('msg91AuthKey').value.trim(),
+    msg91TemplateId: document.getElementById('msg91TemplateId').value.trim(),
+  };
+
+  const saString = serviceAccountJSON ? JSON.stringify(serviceAccountJSON) : '';
+
+  const webEnv = `# Firebase Web SDK
+NEXT_PUBLIC_FIREBASE_API_KEY=${vals.apiKey}
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${vals.authDomain}
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=${vals.projectId}
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${vals.storageBucket}
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${vals.messagingSenderId}
+NEXT_PUBLIC_FIREBASE_APP_ID=${vals.appId}
+
+# Firebase Admin SDK
+FIREBASE_SERVICE_ACCOUNT=${saString}
+
+# MSG91 OTP
+NEXT_PUBLIC_MSG91_AUTH_KEY=${vals.msg91AuthKey}
+MSG91_TEMPLATE_ID=${vals.msg91TemplateId}
+`;
+
+  const adminEnv = `# Firebase Web SDK
+NEXT_PUBLIC_FIREBASE_API_KEY=${vals.apiKey}
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${vals.authDomain}
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=${vals.projectId}
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${vals.storageBucket}
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${vals.messagingSenderId}
+NEXT_PUBLIC_FIREBASE_APP_ID=${vals.appId}
+
+# Firebase Admin SDK
+FIREBASE_SERVICE_ACCOUNT=${saString}
+`;
+
+  // Show output
+  const output = document.getElementById('output');
+  output.classList.add('visible');
+  output.classList.remove('error-text');
+
+  // Store for download
+  window._webEnv = webEnv;
+  window._adminEnv = adminEnv;
+
+  output.innerHTML = `<button class="copy-btn" onclick="downloadFiles()">⬇ Download Both Files</button>` +
+    `✅ Environment files generated!\n\n` +
+    `📁 apps/web/.env.local (${webEnv.length} chars)\n` +
+    `📁 apps/admin/.env.local (${adminEnv.length} chars)\n\n` +
+    `Project: ${vals.projectId}\n` +
+    `Service Account: ${serviceAccountJSON ? '✅ Included' : '⚠️ Missing'}\n` +
+    `MSG91: ${vals.msg91AuthKey ? '✅ Configured' : '⏭ Skipped'}\n\n` +
+    `Click "Download Both Files" above, then move them to the correct folders.\n` +
+    `Or copy the content below:\n\n` +
+    `${'═'.repeat(50)}\n` +
+    `apps/web/.env.local\n` +
+    `${'═'.repeat(50)}\n` +
+    webEnv + `\n` +
+    `${'═'.repeat(50)}\n` +
+    `apps/admin/.env.local\n` +
+    `${'═'.repeat(50)}\n` +
+    adminEnv;
+}
+
+function downloadFiles() {
+  downloadFile('web-env-local.txt', window._webEnv);
+  setTimeout(() => downloadFile('admin-env-local.txt', window._adminEnv), 500);
+}
+
+function downloadFile(name, content) {
+  const blob = new Blob([content], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// Highlight filled inputs
+document.querySelectorAll('.form-group input').forEach(inp => {
+  inp.addEventListener('input', () => {
+    inp.classList.toggle('filled', inp.value.trim().length > 0);
+  });
+});
+</script>
+</body>
+</html>

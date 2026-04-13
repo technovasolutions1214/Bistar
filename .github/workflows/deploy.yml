@@ -1,0 +1,50 @@
+name: Deploy Cloud Functions
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "firebase/functions/**"
+      - "firebase/firestore.rules"
+      - "firebase/storage.rules"
+      - "firebase/firebase.json"
+
+  workflow_dispatch:
+
+jobs:
+  deploy-functions:
+    name: Build & Deploy Cloud Functions
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: firebase
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install function dependencies
+        run: cd functions && npm ci
+
+      - name: Build functions
+        run: cd functions && npm run build
+
+      - name: Deploy to Firebase
+        uses: w9jds/firebase-action@master
+        with:
+          args: deploy --only functions,firestore:rules,storage
+        env:
+          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          PROJECT_PATH: firebase
