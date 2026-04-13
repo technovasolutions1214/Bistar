@@ -1,6 +1,3 @@
-# Firebase App Hosting configuration for NovaFlix web app
-# https://firebase.google.com/docs/app-hosting
-
 runConfig:
   runtime: nodejs20
   concurrency: 80
@@ -11,16 +8,14 @@ runConfig:
 
 env:
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    secret: FIREBASE_API_KEY
+    value: AIzaSyDgr4sgM6mGYkT3pCACOonGdqod1UYuUmc
   - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-    value: novaflix.firebaseapp.com
+    value: novaflix-584d4.firebaseapp.com
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
-    value: novaflix
+    value: novaflix-584d4
   - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-    value: novaflix.firebasestorage.app
+    value: novaflix-584d4.firebasestorage.app
   - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-    secret: FIREBASE_MESSAGING_SENDER_ID
+    value: "1019395253345"
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
-    secret: FIREBASE_APP_ID
-  - variable: NEXT_PUBLIC_CDN_DOMAIN
-    value: cdn.novaflix.in
+    value: "1:1019395253345:web:cfddd0803e19bd0e697620"

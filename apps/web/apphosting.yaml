@@ -1,0 +1,21 @@
+runConfig:
+  runtime: nodejs20
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
+  minInstances: 0
+  maxInstances: 10
+
+env:
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: AIzaSyDgr4sgM6mGYkT3pCACOonGdqod1UYuUmc
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: novaflix-584d4.firebaseapp.com
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: novaflix-584d4
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: novaflix-584d4.firebasestorage.app
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "1019395253345"
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: "1:1019395253345:web:cfddd0803e19bd0e697620"
