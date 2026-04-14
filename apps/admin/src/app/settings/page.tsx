@@ -1,14 +1,31 @@
 "use client";
-import React, { useEffect, useState } from "react";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import React, { useEffect, useState, useCallback } from "react";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  serverTimestamp,
+} from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@novaflix/firebase-config";
 import { AdminLayout } from "@/components/admin-layout";
-import { Button, Input, Loader } from "@novaflix/ui";
+import { Button, Input, Loader, Modal } from "@novaflix/ui";
 
 interface PaymentParam {
   key: string;
   value: string;
+}
+
+interface AdminUser {
+  uid: string;
+  email?: string;
+  phone?: string;
+  displayName?: string;
 }
 
 export default function SettingsPage() {
@@ -25,6 +42,16 @@ export default function SettingsPage() {
   const [existingLogo, setExistingLogo] = useState("");
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState("");
+
+  // Admin management
+  const [admins, setAdmins] = useState<AdminUser[]>([]);
+  const [adminsLoading, setAdminsLoading] = useState(true);
+  const [addAdminInput, setAddAdminInput] = useState("");
+  const [addAdminLoading, setAddAdminLoading] = useState(false);
+  const [addAdminError, setAddAdminError] = useState("");
+  const [addAdminSuccess, setAddAdminSuccess] = useState("");
+  const [removeModalUid, setRemoveModalUid] = useState<string | null>(null);
+  const [removeLoading, setRemoveLoading] = useState(false);
 
   useEffect(() => {
     async function fetchSettings() {
@@ -56,6 +83,102 @@ export default function SettingsPage() {
     }
     fetchSettings();
   }, []);
+
+  const fetchAdmins = useCallback(async () => {
+    setAdminsLoading(true);
+    try {
+      const q = query(collection(db(), "users"), where("role", "==", "admin"));
+      const snap = await getDocs(q);
+      setAdmins(
+        snap.docs.map((d) => ({
+          uid: d.id,
+          email: d.data().email,
+          phone: d.data().phone,
+          displayName: d.data().displayName,
+        }))
+      );
+    } catch (err) {
+      console.error("Failed to fetch admins:", err);
+    } finally {
+      setAdminsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAdmins();
+  }, [fetchAdmins]);
+
+  const handleAddAdmin = async () => {
+    const input = addAdminInput.trim();
+    if (!input) return;
+
+    setAddAdminLoading(true);
+    setAddAdminError("");
+    setAddAdminSuccess("");
+
+    try {
+      const isPhone = /^\+?\d{7,15}$/.test(input);
+      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input);
+
+      if (!isPhone && !isEmail) {
+        setAddAdminError("Please enter a valid email address or phone number (e.g. +919876543210)");
+        setAddAdminLoading(false);
+        return;
+      }
+
+      // Check if user already exists in Firestore
+      const field = isEmail ? "email" : "phone";
+      const q = query(collection(db(), "users"), where(field, "==", input));
+      const snap = await getDocs(q);
+
+      if (!snap.empty) {
+        // User exists — update their role
+        const userDoc = snap.docs[0];
+        if (userDoc.data().role === "admin") {
+          setAddAdminError("This user is already an admin.");
+          setAddAdminLoading(false);
+          return;
+        }
+        await updateDoc(doc(db(), "users", userDoc.id), { role: "admin", updatedAt: serverTimestamp() });
+        setAddAdminSuccess(`${input} has been promoted to admin.`);
+      } else {
+        // User doesn't exist yet — pre-create their doc so when they sign in they'll be admin
+        const newDocRef = doc(collection(db(), "users"));
+        await setDoc(newDocRef, {
+          ...(isEmail ? { email: input } : { phone: input }),
+          displayName: input,
+          role: "admin",
+          subscription: null,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        setAddAdminSuccess(`Admin created for ${input}. They'll have admin access when they sign in.`);
+      }
+
+      setAddAdminInput("");
+      fetchAdmins();
+    } catch (err) {
+      console.error("Failed to add admin:", err);
+      setAddAdminError("Failed to add admin. Please try again.");
+    } finally {
+      setAddAdminLoading(false);
+      setTimeout(() => setAddAdminSuccess(""), 5000);
+    }
+  };
+
+  const handleRemoveAdmin = async () => {
+    if (!removeModalUid) return;
+    setRemoveLoading(true);
+    try {
+      await updateDoc(doc(db(), "users", removeModalUid), { role: "user", updatedAt: serverTimestamp() });
+      setRemoveModalUid(null);
+      fetchAdmins();
+    } catch (err) {
+      console.error("Failed to remove admin:", err);
+    } finally {
+      setRemoveLoading(false);
+    }
+  };
 
   const addParam = () => {
     setPaymentParams([...paymentParams, { key: "", value: "" }]);
@@ -233,6 +356,92 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+
+        {/* Admin Management */}
+        <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-6 space-y-4">
+          <h2 className="text-lg font-semibold">Admin Management</h2>
+          <p className="text-sm text-[var(--muted)]">
+            Add or remove admin users. Enter an email address or phone number (with country code, e.g. +919876543210).
+          </p>
+
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <Input
+                value={addAdminInput}
+                onChange={(e) => { setAddAdminInput(e.target.value); setAddAdminError(""); }}
+                placeholder="email@example.com or +919876543210"
+                onKeyDown={(e) => e.key === "Enter" && handleAddAdmin()}
+              />
+            </div>
+            <Button onClick={handleAddAdmin} loading={addAdminLoading}>
+              Add Admin
+            </Button>
+          </div>
+
+          {addAdminError && (
+            <p className="text-sm text-[var(--danger)]">{addAdminError}</p>
+          )}
+          {addAdminSuccess && (
+            <p className="text-sm text-[var(--success)]">{addAdminSuccess}</p>
+          )}
+
+          {/* Admin list */}
+          <div className="mt-4">
+            <h3 className="text-sm font-medium text-[var(--muted)] mb-3">Current Admins</h3>
+            {adminsLoading ? (
+              <Loader size="sm" />
+            ) : admins.length === 0 ? (
+              <p className="text-sm text-[var(--muted)]">No admins found.</p>
+            ) : (
+              <div className="space-y-2">
+                {admins.map((admin) => (
+                  <div
+                    key={admin.uid}
+                    className="flex items-center justify-between px-4 py-3 rounded-lg bg-[var(--background)] border border-[var(--border)]"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-full bg-[var(--primary)] flex items-center justify-center text-white text-sm font-medium">
+                        {(admin.displayName || admin.email || admin.phone || "A")[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{admin.displayName || "Unnamed"}</p>
+                        <p className="text-xs text-[var(--muted)]">
+                          {admin.email || admin.phone || admin.uid}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setRemoveModalUid(admin.uid)}
+                      className="text-xs px-3 py-1.5 rounded-lg border border-[var(--border)] text-[var(--muted)] hover:text-[var(--danger)] hover:border-[var(--danger)] transition-colors"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Remove Admin Confirmation Modal */}
+        <Modal
+          isOpen={!!removeModalUid}
+          onClose={() => setRemoveModalUid(null)}
+          title="Remove Admin"
+          size="sm"
+        >
+          <p className="text-sm text-[var(--muted)] mb-4">
+            Are you sure you want to remove this user&apos;s admin privileges? They will no longer be able to access the dashboard.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setRemoveModalUid(null)}>
+              Cancel
+            </Button>
+            <Button variant="danger" loading={removeLoading} onClick={handleRemoveAdmin}>
+              Remove Admin
+            </Button>
+          </div>
+        </Modal>
 
         {/* Save */}
         <div className="flex items-center justify-end gap-3">
