@@ -14,19 +14,14 @@ import {
 import { db } from "@novaflix/firebase-config";
 import { Loader } from "@novaflix/ui";
 import { useAuth } from "@/lib/auth-context";
-import { SubscriptionGate } from "@/components/subscription-gate";
-import type { Plan, PaymentSettings } from "@novaflix/shared";
 
-interface GeneralSettings {
-  requireSubscriptionToBrowse?: boolean;
-}
+import type { Plan, PaymentSettings } from "@novaflix/shared";
 
 export default function PlansPage() {
   const router = useRouter();
   const { firebaseUser, userData, loading: authLoading } = useAuth();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
-  const [generalSettings, setGeneralSettings] = useState<GeneralSettings | null>(null);
 
   useEffect(() => {
     async function fetchPlans() {
@@ -38,12 +33,6 @@ export default function PlansPage() {
         );
         const snap = await getDocs(plansQ);
         setPlans(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Plan));
-
-        // Fetch general settings
-        const generalDoc = await getDoc(doc(db(), "settings", "general"));
-        if (generalDoc.exists()) {
-          setGeneralSettings(generalDoc.data() as GeneralSettings);
-        }
       } catch (error) {
         console.error("Failed to fetch plans:", error);
       } finally {
@@ -110,7 +99,6 @@ export default function PlansPage() {
         </p>
       </div>
 
-      <SubscriptionGate requireGate={generalSettings?.requireSubscriptionToBrowse || false}>
         {plans.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <svg className="w-20 h-20 text-[var(--muted)] mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -207,7 +195,6 @@ export default function PlansPage() {
             })}
           </div>
         )}
-      </SubscriptionGate>
     </div>
   );
 }

@@ -99,6 +99,7 @@ export default function BrowsePage() {
 
   return (
     <div className="min-h-screen pt-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+      <SubscriptionGate requireGate={generalSettings?.requireSubscriptionToBrowse || false}>
       {/* Search */}
       <div className="mb-6">
         <Input
@@ -149,7 +150,6 @@ export default function BrowsePage() {
       </div>
 
       {/* Content Grid */}
-      <SubscriptionGate requireGate={generalSettings?.requireSubscriptionToBrowse || false}>
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {Array.from({ length: 12 }).map((_, i) => (
@@ -224,3 +224,4 @@ export default function BrowsePage() {
     </div>
   );
 }
+

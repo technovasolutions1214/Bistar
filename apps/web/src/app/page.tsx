@@ -154,6 +154,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen pt-16">
+      <SubscriptionGate requireGate={generalSettings?.requireSubscriptionToBrowse || false}>
       {/* Hero Banner */}
       {hero && (
         <section className="relative h-[70vh] sm:h-[80vh] w-full">
@@ -236,12 +237,11 @@ export default function HomePage() {
       )}
 
       {/* Content Carousels */}
-      <SubscriptionGate requireGate={generalSettings?.requireSubscriptionToBrowse || false}>
-        <div className="py-8 space-y-2">
-          <ContentCarousel title="Trending Now" items={trending} />
-          <ContentCarousel title="Latest Releases" items={latest} />
-          <ContentCarousel title="Web Series" items={series} />
-        </div>
+      <div className="py-8 space-y-2">
+        <ContentCarousel title="Trending Now" items={trending} />
+        <ContentCarousel title="Latest Releases" items={latest} />
+        <ContentCarousel title="Web Series" items={series} />
+      </div>
       </SubscriptionGate>
     </div>
   );

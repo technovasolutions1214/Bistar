@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { doc, getDoc, updateDoc, collection, getDocs, serverTimestamp, Timestamp } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, getDocs, query, where, orderBy, serverTimestamp, Timestamp } from "firebase/firestore";
 import { db } from "@novaflix/firebase-config";
 import { AdminLayout } from "@/components/admin-layout";
 import { Button, Loader, Modal, useToast } from "@novaflix/ui";
@@ -17,6 +17,8 @@ export default function UserDetailPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [transactions, setTransactions] = useState<any[]>([]);
 
   // Modals
   const [showExtend, setShowExtend] = useState(false);
@@ -41,6 +43,20 @@ export default function UserDetailPage() {
 
       setUser({ uid: userSnap.id, ...userSnap.data() } as User);
       setPlans(plansSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Plan)));
+
+      // Fetch transactions for this user
+      try {
+        const txQuery = query(
+          collection(db(), "transactions"),
+          where("userId", "==", userId),
+          orderBy("createdAt", "desc")
+        );
+        const txSnap = await getDocs(txQuery);
+        setTransactions(txSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      } catch {
+        // Transactions collection may not exist yet or index not ready
+        setTransactions([]);
+      }
     } catch (err) {
       console.error("Failed to fetch user:", err);
     } finally {
@@ -232,6 +248,66 @@ export default function UserDetailPage() {
           )}
           </div>
         </div>
+      </div>
+
+      {/* Transaction / Purchase History */}
+      <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl overflow-hidden">
+        <div className="px-6 py-4 border-b border-[var(--border)]">
+          <h3 className="text-lg font-semibold">Purchase History</h3>
+          <p className="text-xs text-[var(--muted)] mt-1">All payment transactions initiated or completed by this user</p>
+        </div>
+        {transactions.length === 0 ? (
+          <div className="px-6 py-12 text-center">
+            <svg className="w-10 h-10 text-[var(--muted)] mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+            </svg>
+            <p className="text-sm text-[var(--muted)]">No transactions found for this user.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[600px]">
+              <thead>
+                <tr className="text-left text-xs text-[var(--muted)] uppercase tracking-wider">
+                  <th className="px-6 py-3 font-medium">Transaction ID</th>
+                  <th className="px-6 py-3 font-medium">Plan</th>
+                  <th className="px-6 py-3 font-medium">Amount</th>
+                  <th className="px-6 py-3 font-medium">Status</th>
+                  <th className="px-6 py-3 font-medium">Date</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border)]">
+                {transactions.map((tx) => (
+                  <tr key={tx.id} className="hover:bg-[var(--card-hover)] transition-colors">
+                    <td className="px-6 py-3 text-sm font-mono text-[var(--muted)]">
+                      {tx.transactionId || tx.id?.slice(0, 12) || "—"}
+                    </td>
+                    <td className="px-6 py-3 text-sm">{tx.planName || tx.planId || "—"}</td>
+                    <td className="px-6 py-3 text-sm font-medium text-[var(--success)]">
+                      {tx.currency === "INR" ? "₹" : "$"}{tx.amount ?? "—"}
+                    </td>
+                    <td className="px-6 py-3">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        tx.status === "success"
+                          ? "bg-[var(--success)]/15 text-[var(--success)]"
+                          : tx.status === "pending"
+                            ? "bg-[var(--warning)]/15 text-[var(--warning)]"
+                            : "bg-[var(--danger)]/15 text-[var(--danger)]"
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                          tx.status === "success" ? "bg-[var(--success)]" : tx.status === "pending" ? "bg-[var(--warning)]" : "bg-[var(--danger)]"
+                        }`} />
+                        {tx.status || "unknown"}
+                      </span>
+                    </td>
+                    <td className="px-6 py-3 text-sm text-[var(--muted)]">
+                      {tx.createdAt?.toDate ? tx.createdAt.toDate().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Extend Modal */}
