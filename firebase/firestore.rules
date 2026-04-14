@@ -25,7 +25,13 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow write: if isOwner(userId) || isAdmin();
+      // Owners can write their own doc but NOT subscription or role fields
+      allow write: if isAdmin()
+        || (
+          isOwner(userId)
+          && (!request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(["subscription", "role"]))
+        );
     }
 
     // ---------- Content ----------
@@ -47,14 +53,22 @@ service cloud.firestore {
     // ---------- Plans ----------
 
     match /plans/{planId} {
-      allow read: if resource.data.active == true || isAdmin();
+      allow read: if resource.data.isActive == true || isAdmin();
       allow create, update, delete: if isAdmin();
+    }
+
+    // ---------- Transactions ----------
+
+    match /transactions/{txnId} {
+      allow read: if isAdmin();
+      allow write: if false; // Only server-side (admin SDK)
     }
 
     // ---------- Settings ----------
 
     match /settings/{settingId} {
-      allow read: if true;
+      // Payment settings are admin-only; general settings are public read
+      allow read: if settingId != "payment" || isAdmin();
       allow create, update, delete: if isAdmin();
     }
 

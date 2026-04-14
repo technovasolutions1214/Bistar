@@ -4,13 +4,14 @@ import { useRouter, useParams } from "next/navigation";
 import { doc, getDoc, updateDoc, collection, getDocs, serverTimestamp, Timestamp } from "firebase/firestore";
 import { db } from "@novaflix/firebase-config";
 import { AdminLayout } from "@/components/admin-layout";
-import { Button, Loader, Modal } from "@novaflix/ui";
+import { Button, Loader, Modal, useToast } from "@novaflix/ui";
 import type { User, Plan } from "@novaflix/shared";
 
 export default function UserDetailPage() {
   const router = useRouter();
   const params = useParams();
   const userId = params.id as string;
+  const toast = useToast();
 
   const [user, setUser] = useState<User | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -64,8 +65,10 @@ export default function UserDetailPage() {
       });
       await fetchUser();
       setShowExtend(false);
+      toast.success(`Subscription extended by ${extendDays} days`);
     } catch (err) {
       console.error("Failed to extend subscription:", err);
+      toast.error("Failed to extend subscription");
     } finally {
       setSaving(false);
     }
@@ -91,8 +94,10 @@ export default function UserDetailPage() {
       });
       await fetchUser();
       setShowChangePlan(false);
+      toast.success("Plan changed successfully");
     } catch (err) {
       console.error("Failed to change plan:", err);
+      toast.error("Failed to change plan");
     } finally {
       setSaving(false);
     }
@@ -107,8 +112,10 @@ export default function UserDetailPage() {
       });
       await fetchUser();
       setShowCancel(false);
+      toast.success("Subscription cancelled");
     } catch (err) {
       console.error("Failed to cancel subscription:", err);
+      toast.error("Failed to cancel subscription");
     } finally {
       setSaving(false);
     }
@@ -166,26 +173,43 @@ export default function UserDetailPage() {
         </div>
 
         {/* Subscription Card */}
-        <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-6 space-y-4">
-          <h3 className="text-lg font-semibold">Subscription</h3>
+        <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl overflow-hidden">
+          {/* Status indicator strip */}
+          <div className={`h-1.5 ${
+            sub?.status === "active" ? "bg-[var(--success)]" : sub?.status === "expired" ? "bg-[var(--danger)]" : sub?.status === "cancelled" ? "bg-[var(--warning)]" : "bg-[var(--border)]"
+          }`} />
+          <div className="p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold">Subscription</h3>
+            {sub && (
+              <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize flex items-center gap-1.5 ${
+                sub.status === "active" ? "bg-[var(--success)]/10 text-[var(--success)]" : sub.status === "expired" ? "bg-[var(--danger)]/10 text-[var(--danger)]" : "bg-[var(--warning)]/10 text-[var(--warning)]"
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${
+                  sub.status === "active" ? "bg-[var(--success)]" : sub.status === "expired" ? "bg-[var(--danger)]" : "bg-[var(--warning)]"
+                }`} />
+                {sub.status}
+              </span>
+            )}
+          </div>
           {sub ? (
             <>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div>
+                <div className="p-3 rounded-lg bg-[var(--background)]">
                   <p className="text-xs text-[var(--muted)]">Plan</p>
                   <p className="text-sm font-medium mt-1">{sub.planName}</p>
                 </div>
-                <div>
+                <div className="p-3 rounded-lg bg-[var(--background)]">
                   <p className="text-xs text-[var(--muted)]">Status</p>
                   <p className={`text-sm font-medium mt-1 capitalize ${
                     sub.status === "active" ? "text-[var(--success)]" : sub.status === "expired" ? "text-[var(--danger)]" : "text-[var(--warning)]"
                   }`}>{sub.status}</p>
                 </div>
-                <div>
+                <div className="p-3 rounded-lg bg-[var(--background)]">
                   <p className="text-xs text-[var(--muted)]">Start Date</p>
                   <p className="text-sm font-medium mt-1">{sub.startDate?.toDate?.()?.toLocaleDateString() || "N/A"}</p>
                 </div>
-                <div>
+                <div className="p-3 rounded-lg bg-[var(--background)]">
                   <p className="text-xs text-[var(--muted)]">End Date</p>
                   <p className="text-sm font-medium mt-1">{sub.endDate?.toDate?.()?.toLocaleDateString() || "N/A"}</p>
                 </div>
@@ -206,6 +230,7 @@ export default function UserDetailPage() {
               </Button>
             </div>
           )}
+          </div>
         </div>
       </div>
 

@@ -14,13 +14,19 @@ import {
   getDoc,
 } from "firebase/firestore";
 import { db } from "@novaflix/firebase-config";
-import { Loader } from "@novaflix/ui";
+import { Skeleton } from "@novaflix/ui";
 import type { Content, SiteSettings } from "@novaflix/shared";
 import { ContentCarousel } from "@/components/content-carousel";
+import { SubscriptionGate } from "@/components/subscription-gate";
+
+interface GeneralSettings {
+  requireSubscriptionToBrowse?: boolean;
+}
 
 export default function HomePage() {
   const [hero, setHero] = useState<Content | null>(null);
   const [siteSettings, setSiteSettings] = useState<SiteSettings | null>(null);
+  const [generalSettings, setGeneralSettings] = useState<GeneralSettings | null>(null);
   const [trending, setTrending] = useState<Content[]>([]);
   const [latest, setLatest] = useState<Content[]>([]);
   const [series, setSeries] = useState<Content[]>([]);
@@ -35,6 +41,12 @@ export default function HomePage() {
           ? (settingsDoc.data() as SiteSettings)
           : null;
         setSiteSettings(settings);
+
+        // Fetch general settings for subscription gate
+        const generalDoc = await getDoc(doc(db(), "settings", "general"));
+        if (generalDoc.exists()) {
+          setGeneralSettings(generalDoc.data() as GeneralSettings);
+        }
 
         // Fetch hero content
         if (settings?.heroContentId) {
@@ -108,8 +120,34 @@ export default function HomePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader />
+      <div className="min-h-screen pt-16">
+        {/* Hero Skeleton */}
+        <div className="relative h-[70vh] sm:h-[80vh] w-full">
+          <Skeleton className="absolute inset-0 rounded-none" />
+          <div className="absolute bottom-0 left-0 right-0 p-6 sm:p-10 lg:p-16 max-w-3xl space-y-4">
+            <Skeleton className="h-10 w-3/4" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-2/3" />
+            <div className="flex gap-3 pt-2">
+              <Skeleton className="h-12 w-28 rounded-lg" />
+              <Skeleton className="h-12 w-32 rounded-lg" />
+            </div>
+          </div>
+        </div>
+        {/* Carousel Skeletons */}
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="mb-10 px-4 sm:px-6 lg:px-8">
+            <Skeleton className="h-6 w-40 mb-4" />
+            <div className="flex gap-3">
+              {Array.from({ length: 6 }).map((_, j) => (
+                <div key={j} className="flex-shrink-0 w-[160px] sm:w-[200px] md:w-[240px]">
+                  <Skeleton className="aspect-[2/3] rounded-lg" />
+                  <Skeleton className="h-4 w-3/4 mt-2" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     );
   }
@@ -126,11 +164,34 @@ export default function HomePage() {
             className="object-cover"
             priority
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-[var(--background)] via-[var(--background)]/40 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[var(--background)] via-[var(--background)]/60 to-transparent" />
           <div className="absolute inset-0 bg-gradient-to-r from-[var(--background)]/80 to-transparent" />
 
-          <div className="absolute bottom-0 left-0 right-0 p-6 sm:p-10 lg:p-16 max-w-3xl">
-            <h1 className="text-3xl sm:text-5xl font-bold mb-3 leading-tight">
+          <div className="absolute bottom-0 left-0 right-0 p-6 sm:p-10 lg:p-16 max-w-3xl animate-fade-in">
+            {/* Genre tags and rating */}
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
+              {hero.genre?.slice(0, 3).map((g) => (
+                <span
+                  key={g}
+                  className="px-2.5 py-1 text-[10px] font-semibold uppercase rounded-full bg-white/10 backdrop-blur-sm text-white/90 border border-white/10"
+                >
+                  {g}
+                </span>
+              ))}
+              {hero.rating && (
+                <span className="flex items-center gap-1 text-sm text-yellow-400 ml-1">
+                  <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                  {hero.rating.toFixed(1)}
+                </span>
+              )}
+            </div>
+
+            <h1
+              className="text-3xl sm:text-5xl font-bold mb-3 leading-tight"
+              style={{ textShadow: '0 2px 16px rgba(0,0,0,0.8)' }}
+            >
               {siteSettings?.heroTitle || hero.title}
             </h1>
             <p className="text-sm sm:text-base text-[var(--muted)] mb-6 line-clamp-3">
@@ -175,11 +236,13 @@ export default function HomePage() {
       )}
 
       {/* Content Carousels */}
-      <div className="py-8 space-y-2">
-        <ContentCarousel title="Trending Now" items={trending} />
-        <ContentCarousel title="Latest Releases" items={latest} />
-        <ContentCarousel title="Web Series" items={series} />
-      </div>
+      <SubscriptionGate requireGate={generalSettings?.requireSubscriptionToBrowse || false}>
+        <div className="py-8 space-y-2">
+          <ContentCarousel title="Trending Now" items={trending} />
+          <ContentCarousel title="Latest Releases" items={latest} />
+          <ContentCarousel title="Web Series" items={series} />
+        </div>
+      </SubscriptionGate>
     </div>
   );
 }

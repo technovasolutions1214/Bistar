@@ -64,7 +64,7 @@ export function ContentCarousel({ title, items }: ContentCarouselProps) {
               href={`/content/${item.id}`}
               className="flex-shrink-0 w-[160px] sm:w-[200px] md:w-[240px] group/card"
             >
-              <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-[var(--card)]">
+              <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-[var(--card)] shadow-lg shadow-black/30 transition-all duration-300 group-hover/card:-translate-y-2">
                 <Image
                   src={item.thumbnail}
                   alt={item.title}
@@ -72,8 +72,11 @@ export function ContentCarousel({ title, items }: ContentCarouselProps) {
                   className="object-cover transition-transform duration-300 group-hover/card:scale-105"
                   sizes="(max-width: 640px) 160px, (max-width: 768px) 200px, 240px"
                 />
-                {/* Hover Overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-3">
+                {/* Persistent subtle gradient overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent transition-opacity duration-300 group-hover/card:from-black/80" />
+
+                {/* Hover content */}
+                <div className="absolute inset-0 flex flex-col justify-end p-3 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300">
                   <p className="text-sm font-medium line-clamp-2">
                     {item.title}
                   </p>
@@ -81,12 +84,22 @@ export function ContentCarousel({ title, items }: ContentCarouselProps) {
                     {item.type}
                   </span>
                 </div>
+
+                {/* Centered Play Icon on Hover */}
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/card:opacity-100 transition-all duration-300">
+                  <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
+                    <svg className="w-5 h-5 text-black ml-0.5" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  </div>
+                </div>
+
                 {/* Type Badge */}
                 <span className="absolute top-2 left-2 px-2 py-0.5 text-[10px] font-semibold uppercase rounded bg-[var(--primary)]/90 text-white">
                   {item.type}
                 </span>
               </div>
-              <p className="mt-2 text-sm font-medium line-clamp-1 group-hover/card:text-[var(--primary)] transition-colors">
+              <p className="mt-2 text-sm font-medium line-clamp-1 group-hover/card:text-[var(--primary)] transition-colors duration-300">
                 {item.title}
               </p>
             </Link>

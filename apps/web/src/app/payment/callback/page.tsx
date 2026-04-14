@@ -43,9 +43,13 @@ function PaymentCallbackContent() {
       }
 
       try {
+        const idToken = await firebaseUser.getIdToken();
         const res = await fetch("/api/payment/confirm", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
           body: JSON.stringify({
             userId: firebaseUser.uid,
             planId,

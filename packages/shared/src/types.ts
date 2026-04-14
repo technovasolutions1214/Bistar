@@ -89,6 +89,7 @@ export interface SiteSettings {
   heroContentId?: string;
   heroTitle?: string;
   heroDescription?: string;
+  requireSubscriptionToBrowse?: boolean;
 }
 
 export interface AnalyticsEntry {

@@ -14,7 +14,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@novaflix/firebase-config";
 import { AdminLayout } from "@/components/admin-layout";
-import { Button, Input, Loader, Modal } from "@novaflix/ui";
+import { Button, Input, Loader, Modal, useToast } from "@novaflix/ui";
 import type { Plan } from "@novaflix/shared";
 
 interface PlanForm {
@@ -38,6 +38,7 @@ const emptyForm: PlanForm = {
 };
 
 export default function PlansPage() {
+  const toast = useToast();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -101,17 +102,20 @@ export default function PlansPage() {
     try {
       if (editingPlan) {
         await updateDoc(doc(db(), "plans", editingPlan.id), data);
+        toast.success("Plan updated successfully");
       } else {
         await addDoc(collection(db(), "plans"), {
           ...data,
           order: plans.length,
           createdAt: serverTimestamp(),
         });
+        toast.success("Plan created successfully");
       }
       await fetchPlans();
       setShowForm(false);
     } catch (err) {
       console.error("Failed to save plan:", err);
+      toast.error("Failed to save plan");
     } finally {
       setSaving(false);
     }
@@ -124,8 +128,10 @@ export default function PlansPage() {
       await deleteDoc(doc(db(), "plans", deleteTarget.id));
       await fetchPlans();
       setDeleteTarget(null);
+      toast.success("Plan deleted successfully");
     } catch (err) {
       console.error("Failed to delete plan:", err);
+      toast.error("Failed to delete plan");
     } finally {
       setSaving(false);
     }
@@ -173,21 +179,30 @@ export default function PlansPage() {
         {loading ? (
           <div className="flex justify-center py-20"><Loader /></div>
         ) : plans.length === 0 ? (
-          <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-12 text-center">
-            <p className="text-[var(--muted)]">No plans created yet.</p>
-            <Button className="mt-4" onClick={openAdd}>Create Your First Plan</Button>
+          <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-16 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-[var(--primary)]/10 flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-[var(--primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold mb-2">No plans yet</h3>
+            <p className="text-[var(--muted)] text-sm mb-6">Create your first subscription plan to start monetizing your content.</p>
+            <Button onClick={openAdd}>Create Your First Plan</Button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {plans.map((plan, index) => (
               <div
                 key={plan.id}
-                className={`bg-[var(--card)] border rounded-xl p-6 relative ${
+                className={`bg-[var(--card)] border rounded-xl overflow-hidden relative ${
                   plan.isActive ? "border-[var(--border)]" : "border-[var(--border)] opacity-60"
                 }`}
               >
+                {/* Gradient header */}
+                <div className="h-1.5 bg-gradient-to-r from-[var(--primary)] to-[var(--primary-hover)]" />
+                <div className="p-6">
                 {/* Reorder */}
-                <div className="absolute top-3 right-3 flex items-center gap-1">
+                <div className="absolute top-5 right-3 flex items-center gap-1">
                   <button
                     onClick={() => movePlan(index, "up")}
                     disabled={index === 0}
@@ -242,6 +257,7 @@ export default function PlansPage() {
                     {plan.isActive ? "Deactivate" : "Activate"}
                   </Button>
                   <Button size="sm" variant="danger" onClick={() => setDeleteTarget(plan)}>Delete</Button>
+                </div>
                 </div>
               </div>
             ))}

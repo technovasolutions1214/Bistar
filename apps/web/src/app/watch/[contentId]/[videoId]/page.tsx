@@ -20,14 +20,14 @@ export default function WatchPage() {
   const params = useParams<{ contentId: string; videoId: string }>();
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
-  const { userData, loading: authLoading } = useAuth();
+  const { firebaseUser, hasActiveSubscription, loading: authLoading } = useAuth();
 
   const [content, setContent] = useState<Content | null>(null);
   const [video, setVideo] = useState<Video | null>(null);
   const [allVideos, setAllVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const hasActiveSubscription = userData?.subscription?.status === "active";
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [urlLoading, setUrlLoading] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !hasActiveSubscription) {
@@ -72,19 +72,50 @@ export default function WatchPage() {
     fetchData();
   }, [params.contentId, params.videoId]);
 
-  // HLS.js setup
+  // Fetch signed URL when video metadata is loaded and user is authenticated
   useEffect(() => {
-    if (!video || !videoRef.current) return;
+    async function fetchSignedUrl() {
+      if (!firebaseUser || !params.contentId || !params.videoId || !video) return;
+      setUrlLoading(true);
+      try {
+        const idToken = await firebaseUser.getIdToken();
+        const res = await fetch(
+          `/api/video/stream?contentId=${encodeURIComponent(params.contentId)}&videoId=${encodeURIComponent(params.videoId)}`,
+          {
+            headers: {
+              Authorization: `Bearer ${idToken}`,
+            },
+          }
+        );
+
+        if (res.ok) {
+          const data = await res.json();
+          setSignedUrl(data.url);
+        } else {
+          console.error("Failed to fetch signed URL:", res.status);
+        }
+      } catch (error) {
+        console.error("Error fetching signed URL:", error);
+      } finally {
+        setUrlLoading(false);
+      }
+    }
+
+    fetchSignedUrl();
+  }, [firebaseUser, video, params.contentId, params.videoId]);
+
+  // HLS.js setup using signed URL
+  useEffect(() => {
+    if (!signedUrl || !videoRef.current) return;
 
     const videoEl = videoRef.current;
-    const src = video.videoUrl;
 
-    if (src.endsWith(".m3u8")) {
+    if (signedUrl.includes(".m3u8")) {
       // Dynamic import HLS.js
       import("hls.js").then(({ default: Hls }) => {
         if (Hls.isSupported()) {
           const hls = new Hls();
-          hls.loadSource(src);
+          hls.loadSource(signedUrl);
           hls.attachMedia(videoEl);
           hls.on(Hls.Events.MANIFEST_PARSED, () => {
             videoEl.play().catch(() => {});
@@ -92,16 +123,16 @@ export default function WatchPage() {
 
           return () => hls.destroy();
         } else if (videoEl.canPlayType("application/vnd.apple.mpegurl")) {
-          videoEl.src = src;
+          videoEl.src = signedUrl;
           videoEl.addEventListener("loadedmetadata", () => {
             videoEl.play().catch(() => {});
           });
         }
       });
     } else {
-      videoEl.src = src;
+      videoEl.src = signedUrl;
     }
-  }, [video]);
+  }, [signedUrl]);
 
   if (loading || authLoading) {
     return (
@@ -142,14 +173,20 @@ export default function WatchPage() {
     <div className="min-h-screen bg-black pt-16">
       {/* Video Player */}
       <div className="w-full max-w-6xl mx-auto aspect-video bg-black">
-        <video
-          ref={videoRef}
-          className="w-full h-full"
-          controls
-          autoPlay
-          playsInline
-          poster={video.thumbnailUrl || content.banner || content.thumbnail}
-        />
+        {urlLoading ? (
+          <div className="w-full h-full flex items-center justify-center">
+            <Loader />
+          </div>
+        ) : (
+          <video
+            ref={videoRef}
+            className="w-full h-full"
+            controls
+            autoPlay
+            playsInline
+            poster={video.thumbnailUrl || content.banner || content.thumbnail}
+          />
+        )}
       </div>
 
       {/* Video Info */}

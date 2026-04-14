@@ -98,7 +98,7 @@ export default function UsersPage() {
         ) : (
           <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm min-w-[700px]">
                 <thead>
                   <tr className="border-b border-[var(--border)]">
                     <th className="text-left px-4 py-3 text-[var(--muted)] font-medium">Name</th>

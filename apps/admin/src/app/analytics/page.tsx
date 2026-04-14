@@ -186,7 +186,7 @@ export default function AnalyticsPage() {
                 <h2 className="text-lg font-semibold">Daily Breakdown</h2>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm min-w-[700px]">
                   <thead>
                     <tr className="border-b border-[var(--border)]">
                       <th className="text-left px-4 py-3 text-[var(--muted)] font-medium">Date</th>

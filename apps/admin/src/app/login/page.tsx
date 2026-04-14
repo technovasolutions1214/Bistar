@@ -51,17 +51,23 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
+    <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-[var(--background)] via-[var(--background)] to-[var(--primary)]/10">
       <div className="w-full max-w-md">
-        <div className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-8 shadow-xl">
-          {/* Logo */}
-          <div className="flex flex-col items-center mb-8">
-            <div className="w-14 h-14 rounded-xl bg-[var(--primary)] flex items-center justify-center mb-4">
-              <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-            </div>
-            <h1 className="text-2xl font-bold text-white">NovaFlix Admin</h1>
+        {/* Branding */}
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[var(--primary)] to-[var(--primary-hover)] flex items-center justify-center mx-auto mb-4 shadow-lg shadow-[var(--primary)]/25">
+            <svg className="w-9 h-9 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </div>
+          <h1 className="text-3xl font-bold text-white">NovaFlix</h1>
+          <p className="text-[var(--primary)] text-sm font-medium mt-1">Admin Dashboard</p>
+        </div>
+
+        <div className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-8 shadow-xl backdrop-blur-sm">
+          {/* Welcome */}
+          <div className="text-center mb-8">
+            <h2 className="text-xl font-semibold text-white">Welcome back</h2>
             <p className="text-[var(--muted)] text-sm mt-1">Sign in to access the dashboard</p>
           </div>
 
@@ -78,7 +84,7 @@ export default function LoginPage() {
             loading={signingIn}
             variant="secondary"
             size="lg"
-            className="w-full"
+            className="w-full border-[var(--border)] hover:border-[var(--primary)]/50 hover:bg-[var(--card-hover)]"
           >
             <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
               <path

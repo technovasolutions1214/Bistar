@@ -18,10 +18,10 @@ service firebase.storage {
     }
 
     // ---------- Videos ----------
-    // Admins can upload, authenticated users can read/stream
+    // Only admins can read/write; users get signed URLs from the server API
 
     match /videos/{allPaths=**} {
-      allow read: if isAuthenticated();
+      allow read: if isAdmin();
       allow write: if isAdmin()
         && request.resource.size < 5 * 1024 * 1024 * 1024; // 5 GB
     }

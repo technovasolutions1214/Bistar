@@ -14,7 +14,7 @@ import {
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@novaflix/firebase-config";
 import { AdminLayout } from "@/components/admin-layout";
-import { Button, Input, Loader, Modal } from "@novaflix/ui";
+import { Button, Input, Loader, Modal, useToast } from "@novaflix/ui";
 
 interface PaymentParam {
   key: string;
@@ -29,9 +29,12 @@ interface AdminUser {
 }
 
 export default function SettingsPage() {
+  const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+
+  // Content access settings
+  const [requireSubscriptionToBrowse, setRequireSubscriptionToBrowse] = useState(false);
 
   // Payment settings
   const [gatewayUrl, setGatewayUrl] = useState("");
@@ -49,7 +52,6 @@ export default function SettingsPage() {
   const [addAdminInput, setAddAdminInput] = useState("");
   const [addAdminLoading, setAddAdminLoading] = useState(false);
   const [addAdminError, setAddAdminError] = useState("");
-  const [addAdminSuccess, setAddAdminSuccess] = useState("");
   const [removeModalUid, setRemoveModalUid] = useState<string | null>(null);
   const [removeLoading, setRemoveLoading] = useState(false);
 
@@ -74,6 +76,7 @@ export default function SettingsPage() {
           const data = generalSnap.data();
           setSiteName(data.siteName || "");
           setExistingLogo(data.logo || "");
+          setRequireSubscriptionToBrowse(data.requireSubscriptionToBrowse ?? false);
         }
       } catch (err) {
         console.error("Failed to fetch settings:", err);
@@ -114,7 +117,6 @@ export default function SettingsPage() {
 
     setAddAdminLoading(true);
     setAddAdminError("");
-    setAddAdminSuccess("");
 
     try {
       const isPhone = /^\+?\d{7,15}$/.test(input);
@@ -140,7 +142,7 @@ export default function SettingsPage() {
           return;
         }
         await updateDoc(doc(db(), "users", userDoc.id), { role: "admin", updatedAt: serverTimestamp() });
-        setAddAdminSuccess(`${input} has been promoted to admin.`);
+        toast.success(`${input} has been promoted to admin.`);
       } else {
         // User doesn't exist yet — pre-create their doc so when they sign in they'll be admin
         const newDocRef = doc(collection(db(), "users"));
@@ -152,17 +154,16 @@ export default function SettingsPage() {
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
-        setAddAdminSuccess(`Admin created for ${input}. They'll have admin access when they sign in.`);
+        toast.success(`Admin created for ${input}. They'll have admin access when they sign in.`);
       }
 
       setAddAdminInput("");
       fetchAdmins();
     } catch (err) {
       console.error("Failed to add admin:", err);
-      setAddAdminError("Failed to add admin. Please try again.");
+      toast.error("Failed to add admin. Please try again.");
     } finally {
       setAddAdminLoading(false);
-      setTimeout(() => setAddAdminSuccess(""), 5000);
     }
   };
 
@@ -173,8 +174,10 @@ export default function SettingsPage() {
       await updateDoc(doc(db(), "users", removeModalUid), { role: "user", updatedAt: serverTimestamp() });
       setRemoveModalUid(null);
       fetchAdmins();
+      toast.success("Admin privileges removed successfully.");
     } catch (err) {
       console.error("Failed to remove admin:", err);
+      toast.error("Failed to remove admin. Please try again.");
     } finally {
       setRemoveLoading(false);
     }
@@ -196,7 +199,6 @@ export default function SettingsPage() {
 
   const handleSave = async () => {
     setSaving(true);
-    setSaved(false);
 
     try {
       // Upload logo if changed
@@ -227,14 +229,15 @@ export default function SettingsPage() {
         setDoc(doc(db(), "settings", "general"), {
           siteName: siteName.trim(),
           logo: logoUrl,
+          requireSubscriptionToBrowse,
           updatedAt: serverTimestamp(),
         }),
       ]);
 
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      toast.success("Settings saved successfully");
     } catch (err) {
       console.error("Failed to save settings:", err);
+      toast.error("Failed to save settings");
     } finally {
       setSaving(false);
     }
@@ -254,6 +257,35 @@ export default function SettingsPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">Settings</h1>
           <p className="text-[var(--muted)] mt-1">Configure platform settings</p>
+        </div>
+
+        {/* Content Access */}
+        <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-6 space-y-4">
+          <h2 className="text-lg font-semibold">Content Access</h2>
+
+          <div className="flex items-center justify-between">
+            <div className="flex-1 mr-4">
+              <p className="text-sm font-medium">Require subscription to browse content</p>
+              <p className="text-xs text-[var(--muted)] mt-1">
+                When enabled, users without an active subscription will see a paywall overlay on the homepage, browse, and content pages
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={requireSubscriptionToBrowse}
+              onClick={() => setRequireSubscriptionToBrowse(!requireSubscriptionToBrowse)}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                requireSubscriptionToBrowse ? "bg-[var(--primary)]" : "bg-[var(--border)]"
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  requireSubscriptionToBrowse ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
         </div>
 
         {/* Payment Gateway */}
@@ -381,9 +413,6 @@ export default function SettingsPage() {
           {addAdminError && (
             <p className="text-sm text-[var(--danger)]">{addAdminError}</p>
           )}
-          {addAdminSuccess && (
-            <p className="text-sm text-[var(--success)]">{addAdminSuccess}</p>
-          )}
 
           {/* Admin list */}
           <div className="mt-4">
@@ -445,14 +474,6 @@ export default function SettingsPage() {
 
         {/* Save */}
         <div className="flex items-center justify-end gap-3">
-          {saved && (
-            <span className="text-sm text-[var(--success)] flex items-center gap-1">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-              </svg>
-              Settings saved
-            </span>
-          )}
           <Button loading={saving} onClick={handleSave} size="lg">
             Save Settings
           </Button>

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,7 +12,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const authKey = process.env.NEXT_PUBLIC_MSG91_AUTH_KEY;
+    // Rate limit: 5 requests per 10 minutes per phone
+    const { success: allowed } = rateLimit(`send-otp:${phone}`, 5, 10 * 60 * 1000);
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Too many OTP requests. Please try again later." },
+        { status: 429 }
+      );
+    }
+
+    const authKey = process.env.MSG91_AUTH_KEY;
     const templateId = process.env.MSG91_TEMPLATE_ID;
 
     if (!authKey || !templateId) {

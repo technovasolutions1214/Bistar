@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminDb } from "@/lib/firebase-admin";
+import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 
 export async function POST(request: NextRequest) {
@@ -11,6 +11,49 @@ export async function POST(request: NextRequest) {
         { error: "userId, planId, and transactionId are required" },
         { status: 400 }
       );
+    }
+
+    // Verify Firebase Auth token
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return NextResponse.json(
+        { error: "Missing or invalid Authorization header" },
+        { status: 401 }
+      );
+    }
+
+    const idToken = authHeader.split("Bearer ")[1];
+    let decodedToken;
+    try {
+      decodedToken = await getAdminAuth().verifyIdToken(idToken);
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid or expired token" },
+        { status: 401 }
+      );
+    }
+
+    // Verify the caller is the same user (or admin)
+    const isAdmin = decodedToken.admin === true;
+    if (decodedToken.uid !== userId && !isAdmin) {
+      return NextResponse.json(
+        { error: "Unauthorized: token does not match userId" },
+        { status: 403 }
+      );
+    }
+
+    // Deduplication: check if transactionId already exists
+    const existingTxn = await getAdminDb()
+      .collection("transactions")
+      .where("transactionId", "==", transactionId)
+      .limit(1)
+      .get();
+
+    if (!existingTxn.empty) {
+      return NextResponse.json({
+        success: true,
+        message: "Transaction already processed",
+      });
     }
 
     // Fetch the plan details
@@ -42,7 +85,7 @@ export async function POST(request: NextRequest) {
         updatedAt: FieldValue.serverTimestamp(),
       });
 
-    // Optionally store transaction record
+    // Store transaction record
     await getAdminDb().collection("transactions").add({
       userId,
       planId,

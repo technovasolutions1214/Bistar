@@ -17,12 +17,17 @@ import { Loader, Button } from "@novaflix/ui";
 import { useAuth } from "@/lib/auth-context";
 import type { Content, Video } from "@novaflix/shared";
 
+interface GeneralSettings {
+  requireSubscriptionToBrowse?: boolean;
+}
+
 export default function ContentDetailPage() {
   const params = useParams<{ id: string }>();
   const { userData, loading: authLoading } = useAuth();
   const [content, setContent] = useState<Content | null>(null);
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
+  const [generalSettings, setGeneralSettings] = useState<GeneralSettings | null>(null);
 
   useEffect(() => {
     async function fetchContent() {
@@ -42,6 +47,12 @@ export default function ContentDetailPage() {
         setVideos(
           videosSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Video)
         );
+
+        // Fetch general settings
+        const generalDoc = await getDoc(doc(db(), "settings", "general"));
+        if (generalDoc.exists()) {
+          setGeneralSettings(generalDoc.data() as GeneralSettings);
+        }
       } catch (error) {
         console.error("Failed to fetch content:", error);
       } finally {
@@ -96,13 +107,18 @@ export default function ContentDetailPage() {
           className="object-cover"
           priority
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[var(--background)] via-[var(--background)]/50 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-r from-[var(--background)]/70 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[var(--background)] via-[var(--background)]/60 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[var(--background)]/80 to-transparent" />
       </div>
 
       {/* Content Info */}
       <div className="relative -mt-40 z-10 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto">
-        <h1 className="text-3xl sm:text-4xl font-bold mb-3">{content.title}</h1>
+        <h1
+          className="text-3xl sm:text-4xl font-bold mb-3"
+          style={{ textShadow: '0 2px 16px rgba(0,0,0,0.8)' }}
+        >
+          {content.title}
+        </h1>
 
         <div className="flex items-center gap-3 mb-4 flex-wrap">
           <span className="px-2.5 py-1 text-xs font-semibold uppercase rounded bg-[var(--primary)] text-white">
@@ -126,7 +142,10 @@ export default function ContentDetailPage() {
           ))}
         </div>
 
-        <p className="text-[var(--muted)] max-w-2xl mb-8 leading-relaxed">
+        <p
+          className="text-[var(--muted)] max-w-2xl mb-8 leading-relaxed"
+          style={{ textShadow: '0 1px 8px rgba(0,0,0,0.5)' }}
+        >
           {content.description}
         </p>
 
@@ -148,19 +167,25 @@ export default function ContentDetailPage() {
         )}
 
         {hasAnyActiveSubscription && !isSubscribed && (
-          <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-6 mb-8">
-            <h3 className="text-lg font-semibold mb-2">
-              Upgrade your plan
-            </h3>
-            <p className="text-sm text-[var(--muted)] mb-4">
-              This content requires a higher subscription plan. Upgrade now to
-              start watching.
-            </p>
-            <Link href="/plans">
-              <Button className="bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white px-6 py-2.5 rounded-lg font-medium">
-                Upgrade Plan
-              </Button>
-            </Link>
+          <div className="relative bg-[var(--card)] rounded-xl p-6 mb-8 overflow-hidden">
+            {/* Gradient border effect */}
+            <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-[var(--primary)] via-orange-500 to-[var(--primary)] p-[1px]">
+              <div className="w-full h-full bg-[var(--card)] rounded-xl" />
+            </div>
+            <div className="relative z-10">
+              <h3 className="text-lg font-semibold mb-2">
+                Upgrade your plan
+              </h3>
+              <p className="text-sm text-[var(--muted)] mb-4">
+                This content requires a higher subscription plan. Upgrade now to
+                start watching.
+              </p>
+              <Link href="/plans">
+                <Button className="bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white px-6 py-2.5 rounded-lg font-medium">
+                  Upgrade Plan
+                </Button>
+              </Link>
+            </div>
           </div>
         )}
 
@@ -174,7 +199,7 @@ export default function ContentDetailPage() {
               {videos.map((video, index) => (
                 <div
                   key={video.id}
-                  className="flex items-center gap-4 bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 hover:bg-[var(--card-hover)] transition-colors group"
+                  className="flex items-center gap-4 bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 hover:bg-[var(--card-hover)] hover:border-[var(--card-hover)] hover:shadow-lg shadow-black/20 transition-all duration-200 group"
                 >
                   {/* Thumbnail or Index */}
                   <div className="relative w-16 h-16 sm:w-24 sm:h-16 flex-shrink-0 rounded-lg overflow-hidden bg-[var(--background)]">
@@ -194,7 +219,7 @@ export default function ContentDetailPage() {
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-sm sm:text-base line-clamp-1">
+                    <h3 className="font-medium text-sm sm:text-base line-clamp-1 group-hover:text-white transition-colors">
                       {content.type === "series" && video.season && video.episode
                         ? `S${video.season} E${video.episode} - ${video.title}`
                         : video.title}
@@ -213,7 +238,7 @@ export default function ContentDetailPage() {
                   {isSubscribed || hasAnyActiveSubscription ? (
                     <Link
                       href={`/watch/${content.id}/${video.id}`}
-                      className="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-colors"
+                      className="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] hover:scale-110 transition-all duration-200"
                     >
                       <svg
                         className="w-5 h-5 ml-0.5"
