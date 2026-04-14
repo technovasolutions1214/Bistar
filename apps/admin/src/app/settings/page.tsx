@@ -14,6 +14,7 @@ import {
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@novaflix/firebase-config";
 import { AdminLayout } from "@/components/admin-layout";
+import { useAuth } from "@/lib/auth-context";
 import { Button, Input, Loader, Modal, useToast } from "@novaflix/ui";
 
 interface PaymentParam {
@@ -30,6 +31,7 @@ interface AdminUser {
 
 export default function SettingsPage() {
   const toast = useToast();
+  const { firebaseUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -225,13 +227,13 @@ export default function SettingsPage() {
           gatewayUrl,
           params: paramsObj,
           updatedAt: serverTimestamp(),
-        }),
+        }, { merge: true }),
         setDoc(doc(db(), "settings", "general"), {
           siteName: siteName.trim(),
           logo: logoUrl,
           requireSubscriptionToBrowse,
           updatedAt: serverTimestamp(),
-        }),
+        }, { merge: true }),
       ]);
 
       toast.success("Settings saved successfully");
@@ -439,12 +441,21 @@ export default function SettingsPage() {
                         </p>
                       </div>
                     </div>
-                    <button
-                      onClick={() => setRemoveModalUid(admin.uid)}
-                      className="text-xs px-3 py-1.5 rounded-lg border border-[var(--border)] text-[var(--muted)] hover:text-[var(--danger)] hover:border-[var(--danger)] transition-colors"
-                    >
-                      Remove
-                    </button>
+                    {admin.uid === firebaseUser?.uid ? (
+                      <span
+                        title="You cannot remove yourself"
+                        className="text-xs px-3 py-1.5 rounded-lg border border-[var(--border)] text-[var(--muted)] opacity-50 cursor-not-allowed"
+                      >
+                        Remove
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => setRemoveModalUid(admin.uid)}
+                        className="text-xs px-3 py-1.5 rounded-lg border border-[var(--border)] text-[var(--muted)] hover:text-[var(--danger)] hover:border-[var(--danger)] transition-colors"
+                      >
+                        Remove
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/sidebar";
@@ -8,21 +8,24 @@ import { Loader } from "@novaflix/ui";
 export function AdminLayout({ children }: { children: React.ReactNode }) {
   const { firebaseUser, userData, loading, isAdmin } = useAuth();
   const router = useRouter();
+  const [redirecting, setRedirecting] = useState(false);
 
-  if (loading) {
+  useEffect(() => {
+    if (!loading && !firebaseUser) {
+      setRedirecting(true);
+      router.replace("/login");
+    }
+  }, [loading, firebaseUser, router]);
+
+  if (loading || redirecting) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
         <Loader />
       </div>
     );
   }
 
-  if (!firebaseUser || !userData) {
-    router.replace("/login");
-    return null;
-  }
-
-  if (!isAdmin) {
+  if (!userData || !isAdmin) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4">
         <div className="w-16 h-16 rounded-full bg-[var(--danger)]/10 flex items-center justify-center">

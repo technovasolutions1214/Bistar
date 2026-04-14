@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { collection, getCountFromServer, query, orderBy, limit, getDocs } from "firebase/firestore";
+import { collection, query, orderBy, limit, getDocs } from "firebase/firestore";
 import { db } from "@novaflix/firebase-config";
 import { AdminLayout } from "@/components/admin-layout";
 import { Card, Button, Loader } from "@novaflix/ui";
@@ -18,18 +18,69 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentUsers, setRecentUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [usersError, setUsersError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchDashboard() {
-      try {
-        const [usersSnap, contentSnap] = await Promise.all([
-          getCountFromServer(collection(db(),"users")),
-          getCountFromServer(collection(db(),"content")),
-        ]);
+      // Fetch stats independently so partial failures don't kill the whole dashboard
+      let totalUsers = 0;
+      let activeSubs = 0;
+      let totalContent = 0;
+      let totalRevenue = 0;
 
-        // Fetch recent signups
+      // --- Stats section ---
+      try {
+        // Fetch users with a limit for counting
+        const usersQuery = query(
+          collection(db(), "users"),
+          orderBy("createdAt", "desc"),
+          limit(100)
+        );
+        const usersSnap = await getDocs(usersQuery);
+        totalUsers = usersSnap.size;
+
+        usersSnap.forEach((d) => {
+          const data = d.data();
+          if (data.subscription?.status === "active") {
+            activeSubs++;
+          }
+        });
+
+        // Fetch content with a limit for counting
+        const contentQuery = query(
+          collection(db(), "content"),
+          orderBy("createdAt", "desc"),
+          limit(100)
+        );
+        const contentSnap = await getDocs(contentQuery);
+        totalContent = contentSnap.size;
+
+        // Fetch revenue from analytics
+        try {
+          const analyticsSnap = await getDocs(collection(db(), "analytics"));
+          analyticsSnap.forEach((d) => {
+            totalRevenue += d.data().revenue || 0;
+          });
+        } catch {
+          // Analytics may not exist; revenue stays 0
+        }
+
+        setStats({
+          totalUsers,
+          activeSubscriptions: activeSubs,
+          totalContent,
+          revenue: totalRevenue,
+        });
+      } catch (err) {
+        console.error("Failed to fetch stats:", err);
+        setStatsError("Failed to load dashboard statistics.");
+      }
+
+      // --- Recent users section ---
+      try {
         const recentQuery = query(
-          collection(db(),"users"),
+          collection(db(), "users"),
           orderBy("createdAt", "desc"),
           limit(10)
         );
@@ -37,36 +88,13 @@ export default function DashboardPage() {
         const users = recentSnap.docs.map(
           (d) => ({ uid: d.id, ...d.data() } as User)
         );
-
-        // Count active subscriptions
-        let activeSubs = 0;
-        let totalRevenue = 0;
-        const allUsersSnap = await getDocs(collection(db(),"users"));
-        allUsersSnap.forEach((d) => {
-          const data = d.data();
-          if (data.subscription?.status === "active") {
-            activeSubs++;
-          }
-        });
-
-        // Fetch revenue from analytics
-        const analyticsSnap = await getDocs(collection(db(),"analytics"));
-        analyticsSnap.forEach((d) => {
-          totalRevenue += d.data().revenue || 0;
-        });
-
-        setStats({
-          totalUsers: usersSnap.data().count,
-          activeSubscriptions: activeSubs,
-          totalContent: contentSnap.data().count,
-          revenue: totalRevenue,
-        });
         setRecentUsers(users);
       } catch (err) {
-        console.error("Failed to fetch dashboard data:", err);
-      } finally {
-        setLoading(false);
+        console.error("Failed to fetch recent users:", err);
+        setUsersError("Failed to load recent users.");
       }
+
+      setLoading(false);
     }
 
     fetchDashboard();
@@ -141,26 +169,32 @@ export default function DashboardPage() {
         ) : (
           <>
             {/* Stat Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {statCards.map((stat) => (
-                <div
-                  key={stat.label}
-                  className={`bg-gradient-to-br ${stat.gradient} bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 hover:scale-[1.02] transition-transform duration-200 cursor-default`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-[var(--muted)]">{stat.label}</p>
-                      <p className={`text-2xl font-bold mt-1 ${stat.valueClass}`}>
-                        {stat.value}
-                      </p>
-                    </div>
-                    <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${stat.iconBg}`}>
-                      {stat.icon}
+            {statsError ? (
+              <div className="bg-[var(--danger)]/10 border border-[var(--danger)]/20 rounded-xl p-6 text-center">
+                <p className="text-sm text-[var(--danger)]">{statsError}</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {statCards.map((stat) => (
+                  <div
+                    key={stat.label}
+                    className={`bg-gradient-to-br ${stat.gradient} bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 hover:scale-[1.02] transition-transform duration-200 cursor-default`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-[var(--muted)]">{stat.label}</p>
+                        <p className={`text-2xl font-bold mt-1 ${stat.valueClass}`}>
+                          {stat.value}
+                        </p>
+                      </div>
+                      <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${stat.iconBg}`}>
+                        {stat.icon}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
 
             {/* Quick Actions + Recent Users */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -190,6 +224,11 @@ export default function DashboardPage() {
               {/* Recent Signups */}
               <div className="lg:col-span-2 bg-[var(--card)] border border-[var(--border)] rounded-xl p-6">
                 <h2 className="text-lg font-semibold mb-4">Recent Signups</h2>
+                {usersError ? (
+                  <div className="bg-[var(--danger)]/10 border border-[var(--danger)]/20 rounded-lg p-4 text-center">
+                    <p className="text-sm text-[var(--danger)]">{usersError}</p>
+                  </div>
+                ) : (
                 <div className="divide-y divide-[var(--border)]">
                   {recentUsers.length === 0 ? (
                     <p className="text-[var(--muted)] text-sm py-6 text-center">No users yet.</p>
@@ -226,6 +265,7 @@ export default function DashboardPage() {
                     ))
                   )}
                 </div>
+                )}
               </div>
             </div>
           </>

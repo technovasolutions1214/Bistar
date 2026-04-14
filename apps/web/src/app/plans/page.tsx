@@ -22,6 +22,7 @@ export default function PlansPage() {
   const { firebaseUser, userData, loading: authLoading } = useAuth();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchPlans() {
@@ -49,11 +50,12 @@ export default function PlansPage() {
       return;
     }
 
+    setError(null);
     try {
       // Fetch payment gateway URL
       const paymentDoc = await getDoc(doc(db(), "settings", "payment"));
       if (!paymentDoc.exists()) {
-        alert("Payment gateway not configured. Please contact support.");
+        setError("Payment gateway not configured. Please contact support.");
         return;
       }
 
@@ -70,7 +72,7 @@ export default function PlansPage() {
       window.location.href = `${settings.gatewayUrl}?${params.toString()}`;
     } catch (error) {
       console.error("Failed to initiate payment:", error);
-      alert("Something went wrong. Please try again.");
+      setError("Something went wrong. Please try again.");
     }
   }
 
@@ -98,6 +100,12 @@ export default function PlansPage() {
           subscription.
         </p>
       </div>
+
+      {error && (
+        <div className="mb-8 max-w-md mx-auto p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-400 text-center">
+          {error}
+        </div>
+      )}
 
         {plans.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">

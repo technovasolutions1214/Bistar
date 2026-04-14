@@ -25,6 +25,8 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
+      // Explicit list for admin collection queries (e.g. getCountFromServer)
+      allow list: if isAdmin();
       // Owners can write their own doc but NOT subscription or role fields
       allow write: if isAdmin()
         || (

@@ -20,6 +20,7 @@ export default function WatchPage() {
   const params = useParams<{ contentId: string; videoId: string }>();
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const hlsRef = useRef<import("hls.js").default | null>(null);
   const { firebaseUser, hasActiveSubscription, loading: authLoading } = useAuth();
 
   const [content, setContent] = useState<Content | null>(null);
@@ -72,6 +73,11 @@ export default function WatchPage() {
     fetchData();
   }, [params.contentId, params.videoId]);
 
+  // Reset signedUrl when videoId changes to prevent stale URL flash
+  useEffect(() => {
+    setSignedUrl(null);
+  }, [params.videoId]);
+
   // Fetch signed URL when video metadata is loaded and user is authenticated
   useEffect(() => {
     async function fetchSignedUrl() {
@@ -110,18 +116,23 @@ export default function WatchPage() {
 
     const videoEl = videoRef.current;
 
+    // Destroy previous HLS instance if any
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+
     if (signedUrl.includes(".m3u8")) {
       // Dynamic import HLS.js
       import("hls.js").then(({ default: Hls }) => {
         if (Hls.isSupported()) {
           const hls = new Hls();
+          hlsRef.current = hls;
           hls.loadSource(signedUrl);
           hls.attachMedia(videoEl);
           hls.on(Hls.Events.MANIFEST_PARSED, () => {
             videoEl.play().catch(() => {});
           });
-
-          return () => hls.destroy();
         } else if (videoEl.canPlayType("application/vnd.apple.mpegurl")) {
           videoEl.src = signedUrl;
           videoEl.addEventListener("loadedmetadata", () => {
@@ -132,6 +143,13 @@ export default function WatchPage() {
     } else {
       videoEl.src = signedUrl;
     }
+
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
   }, [signedUrl]);
 
   if (loading || authLoading) {

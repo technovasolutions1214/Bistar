@@ -1,12 +1,28 @@
 "use client";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 export function Navbar() {
   const { firebaseUser, loading, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close desktop dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    if (menuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [menuOpen]);
 
   // Prevent body scroll when mobile drawer is open
   useEffect(() => {
@@ -49,7 +65,7 @@ export function Navbar() {
               {!loading && (
                 <>
                   {firebaseUser ? (
-                    <div className="relative hidden md:block">
+                    <div ref={dropdownRef} className="relative hidden md:block">
                       <button
                         onClick={() => setMenuOpen(!menuOpen)}
                         className="flex items-center gap-2 text-sm"

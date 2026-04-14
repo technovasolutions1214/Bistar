@@ -242,6 +242,29 @@ export default function HomePage() {
         <ContentCarousel title="Latest Releases" items={latest} />
         <ContentCarousel title="Web Series" items={series} />
       </div>
+
+      {/* Empty state when no content exists */}
+      {!hero && trending.length === 0 && latest.length === 0 && series.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-32 px-4 text-center">
+          <svg
+            className="w-20 h-20 text-[var(--muted)] mb-6"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1}
+              d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"
+            />
+          </svg>
+          <h2 className="text-2xl font-bold mb-2">No content available yet</h2>
+          <p className="text-[var(--muted)] max-w-sm">
+            We are working on adding new movies and series. Please check back later for updates.
+          </p>
+        </div>
+      )}
       </SubscriptionGate>
     </div>
   );

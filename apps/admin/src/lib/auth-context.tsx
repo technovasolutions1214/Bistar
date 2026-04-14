@@ -33,17 +33,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth(), async (user) => {
       setFirebaseUser(user);
-      if (user) {
-        const userDoc = await getDoc(doc(db(), "users", user.uid));
-        if (userDoc.exists()) {
-          setUserData({ uid: user.uid, ...userDoc.data() } as User);
+      try {
+        if (user) {
+          const userDoc = await getDoc(doc(db(), "users", user.uid));
+          if (userDoc.exists()) {
+            setUserData({ uid: user.uid, ...userDoc.data() } as User);
+          } else {
+            setUserData(null);
+          }
         } else {
           setUserData(null);
         }
-      } else {
+      } catch (err) {
+        console.error("Failed to fetch user data:", err);
         setUserData(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
     return () => unsubscribe();
   }, []);

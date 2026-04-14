@@ -5,11 +5,12 @@ import { collection, addDoc, getDocs, serverTimestamp } from "firebase/firestore
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@novaflix/firebase-config";
 import { AdminLayout } from "@/components/admin-layout";
-import { Button, Input } from "@novaflix/ui";
+import { Button, Input, useToast } from "@novaflix/ui";
 import { GENRES, type Plan } from "@novaflix/shared";
 
 export default function NewContentPage() {
   const router = useRouter();
+  const toast = useToast();
   const [saving, setSaving] = useState(false);
   const [plans, setPlans] = useState<Plan[]>([]);
 
@@ -32,8 +33,13 @@ export default function NewContentPage() {
 
   useEffect(() => {
     async function fetchPlans() {
-      const snap = await getDocs(collection(db(), "plans"));
-      setPlans(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Plan)));
+      try {
+        const snap = await getDocs(collection(db(), "plans"));
+        setPlans(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Plan)));
+      } catch (err) {
+        console.error("Failed to fetch plans:", err);
+        toast.error("Failed to load plans");
+      }
     }
     fetchPlans();
   }, []);
@@ -102,9 +108,11 @@ export default function NewContentPage() {
         updatedAt: serverTimestamp(),
       });
 
+      toast.success("Content created successfully");
       router.push("/content");
     } catch (err) {
       console.error("Failed to create content:", err);
+      toast.error("Failed to create content");
     } finally {
       setSaving(false);
     }

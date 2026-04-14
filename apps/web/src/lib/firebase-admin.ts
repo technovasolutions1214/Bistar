@@ -11,7 +11,14 @@ function getApp() {
     throw new Error("FIREBASE_SERVICE_ACCOUNT env var is not set");
   }
 
-  const serviceAccount = JSON.parse(serviceAccountJson) as ServiceAccount;
+  let serviceAccount: ServiceAccount;
+  try {
+    serviceAccount = JSON.parse(serviceAccountJson) as ServiceAccount;
+  } catch (error) {
+    throw new Error(
+      "FIREBASE_SERVICE_ACCOUNT env var contains malformed JSON. Please verify the value is valid JSON."
+    );
+  }
   return initializeApp({ credential: cert(serviceAccount) });
 }
 

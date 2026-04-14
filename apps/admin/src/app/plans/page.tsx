@@ -138,11 +138,17 @@ export default function PlansPage() {
   };
 
   const toggleActive = async (plan: Plan) => {
-    await updateDoc(doc(db(), "plans", plan.id), {
-      isActive: !plan.isActive,
-      updatedAt: serverTimestamp(),
-    });
-    await fetchPlans();
+    try {
+      await updateDoc(doc(db(), "plans", plan.id), {
+        isActive: !plan.isActive,
+        updatedAt: serverTimestamp(),
+      });
+      await fetchPlans();
+      toast.success(`Plan ${plan.isActive ? "deactivated" : "activated"} successfully`);
+    } catch (err) {
+      console.error("Failed to toggle plan status:", err);
+      toast.error("Failed to update plan status");
+    }
   };
 
   const movePlan = async (index: number, direction: "up" | "down") => {
@@ -152,12 +158,17 @@ export default function PlansPage() {
 
     [newPlans[index], newPlans[swapIndex]] = [newPlans[swapIndex], newPlans[index]];
 
-    const batch = writeBatch(db());
-    newPlans.forEach((p, i) => {
-      batch.update(doc(db(), "plans", p.id), { order: i });
-    });
-    await batch.commit();
-    setPlans(newPlans);
+    try {
+      const batch = writeBatch(db());
+      newPlans.forEach((p, i) => {
+        batch.update(doc(db(), "plans", p.id), { order: i });
+      });
+      await batch.commit();
+      setPlans(newPlans);
+    } catch (err) {
+      console.error("Failed to reorder plans:", err);
+      toast.error("Failed to reorder plans");
+    }
   };
 
   return (

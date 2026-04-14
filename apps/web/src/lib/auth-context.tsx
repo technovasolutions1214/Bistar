@@ -30,9 +30,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth(), async (user) => {
       setFirebaseUser(user);
       if (user) {
-        const userDoc = await getDoc(doc(db(), "users", user.uid));
-        if (userDoc.exists()) {
-          setUserData({ uid: user.uid, ...userDoc.data() } as User);
+        try {
+          const userDoc = await getDoc(doc(db(), "users", user.uid));
+          if (userDoc.exists()) {
+            setUserData({ uid: user.uid, ...userDoc.data() } as User);
+          }
+        } catch (error) {
+          console.error("Failed to fetch user data:", error);
+          setUserData(null);
         }
       } else {
         setUserData(null);

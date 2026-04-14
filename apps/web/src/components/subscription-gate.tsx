@@ -11,8 +11,23 @@ interface SubscriptionGateProps {
 export function SubscriptionGate({ requireGate, children }: SubscriptionGateProps) {
   const { hasActiveSubscription, loading, firebaseUser } = useAuth();
 
-  // Don't flash the gate while loading
-  if (loading || !requireGate || hasActiveSubscription) {
+  // Show loading skeleton while auth state is resolving and gate is required
+  if (loading && requireGate) {
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center px-6">
+        <div className="animate-pulse space-y-4 w-full max-w-md">
+          <div className="h-20 w-20 rounded-full bg-[var(--card)] mx-auto" />
+          <div className="h-8 w-3/4 bg-[var(--card)] rounded mx-auto" />
+          <div className="h-4 w-full bg-[var(--card)] rounded" />
+          <div className="h-4 w-2/3 bg-[var(--card)] rounded" />
+          <div className="h-12 w-40 bg-[var(--card)] rounded-lg mx-auto" />
+        </div>
+      </div>
+    );
+  }
+
+  // Don't gate if not required or user has subscription
+  if (!requireGate || hasActiveSubscription) {
     return <>{children}</>;
   }
 

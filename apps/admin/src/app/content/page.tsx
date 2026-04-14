@@ -12,13 +12,14 @@ import {
 } from "firebase/firestore";
 import { db } from "@novaflix/firebase-config";
 import { AdminLayout } from "@/components/admin-layout";
-import { Button, Input, Loader, Modal } from "@novaflix/ui";
+import { Button, Input, Loader, Modal, useToast } from "@novaflix/ui";
 import type { Content } from "@novaflix/shared";
 
 const ITEMS_PER_PAGE = 10;
 
 export default function ContentListPage() {
   const router = useRouter();
+  const toast = useToast();
   const [content, setContent] = useState<Content[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -66,8 +67,10 @@ export default function ContentListPage() {
       await deleteDoc(doc(db(), "content", deleteTarget.id));
       setContent((prev) => prev.filter((c) => c.id !== deleteTarget.id));
       setDeleteTarget(null);
+      toast.success("Content deleted successfully");
     } catch (err) {
       console.error("Failed to delete content:", err);
+      toast.error("Failed to delete content");
     } finally {
       setDeleting(false);
     }

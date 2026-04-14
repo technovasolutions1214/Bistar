@@ -261,18 +261,29 @@ export default function EditContentPage() {
 
     [newVideos[index], newVideos[swapIndex]] = [newVideos[swapIndex], newVideos[index]];
 
-    // Update order field
-    const batch = writeBatch(db());
-    newVideos.forEach((v, i) => {
-      batch.update(doc(db(), "content", contentId, "videos", v.id), { order: i });
-    });
-    await batch.commit();
-    setVideos(newVideos);
+    try {
+      // Update order field
+      const batch = writeBatch(db());
+      newVideos.forEach((v, i) => {
+        batch.update(doc(db(), "content", contentId, "videos", v.id), { order: i });
+      });
+      await batch.commit();
+      setVideos(newVideos);
+    } catch (err) {
+      console.error("Failed to reorder videos:", err);
+      toast.error("Failed to reorder videos");
+    }
   };
 
   const deleteVideo = async (videoId: string) => {
-    await deleteDoc(doc(db(), "content", contentId, "videos", videoId));
-    setVideos((prev) => prev.filter((v) => v.id !== videoId));
+    try {
+      await deleteDoc(doc(db(), "content", contentId, "videos", videoId));
+      setVideos((prev) => prev.filter((v) => v.id !== videoId));
+      toast.success("Video deleted");
+    } catch (err) {
+      console.error("Failed to delete video:", err);
+      toast.error("Failed to delete video");
+    }
   };
 
   const statusBadge = (s: Video["status"]) => {

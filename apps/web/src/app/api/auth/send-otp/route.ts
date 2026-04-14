@@ -12,6 +12,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Server-side phone validation
+    if (!/^\+?[1-9]\d{6,14}$/.test(phone)) {
+      return NextResponse.json(
+        { error: "Invalid phone number format" },
+        { status: 400 }
+      );
+    }
+
     // Rate limit: 5 requests per 10 minutes per phone
     const { success: allowed } = rateLimit(`send-otp:${phone}`, 5, 10 * 60 * 1000);
     if (!allowed) {
@@ -33,7 +41,7 @@ export async function POST(request: NextRequest) {
 
     // Send OTP via MSG91
     const response = await fetch(
-      `https://control.msg91.com/api/v5/otp?template_id=${templateId}&mobile=${phone}`,
+      `https://control.msg91.com/api/v5/otp?template_id=${encodeURIComponent(templateId)}&mobile=${encodeURIComponent(phone)}`,
       {
         method: "POST",
         headers: {

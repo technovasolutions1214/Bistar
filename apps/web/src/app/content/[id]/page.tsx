@@ -132,7 +132,7 @@ export default function ContentDetailPage() {
               {content.rating.toFixed(1)}
             </span>
           )}
-          {content.genre.map((g) => (
+          {(content.genre ?? []).map((g) => (
             <span
               key={g}
               className="px-2.5 py-1 text-xs rounded-full bg-[var(--card)] text-[var(--muted)] border border-[var(--border)]"

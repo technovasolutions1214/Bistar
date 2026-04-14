@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
@@ -21,9 +21,12 @@ function PaymentCallbackContent() {
   const { firebaseUser } = useAuth();
   const [status, setStatus] = useState<PaymentStatus>("loading");
   const [message, setMessage] = useState("");
+  const processedRef = useRef(false);
 
   useEffect(() => {
     async function processPayment() {
+      if (processedRef.current) return;
+
       const paymentStatus = searchParams.get("status");
       const txnId = searchParams.get("txnId");
       const planId = searchParams.get("planId");
@@ -41,6 +44,8 @@ function PaymentCallbackContent() {
         setMessage("User not authenticated. Please sign in and try again.");
         return;
       }
+
+      processedRef.current = true;
 
       try {
         const idToken = await firebaseUser.getIdToken();

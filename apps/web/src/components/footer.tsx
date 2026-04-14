@@ -46,19 +46,19 @@ export function Footer() {
             </h4>
             <ul className="space-y-2">
               <li>
-                <Link href="/terms" className="text-sm text-[var(--muted)] hover:text-white transition-colors">
-                  Terms of Service
-                </Link>
+                <span className="text-sm text-[var(--muted)]">
+                  Terms of Service - Coming Soon
+                </span>
               </li>
               <li>
-                <Link href="/privacy" className="text-sm text-[var(--muted)] hover:text-white transition-colors">
-                  Privacy Policy
-                </Link>
+                <span className="text-sm text-[var(--muted)]">
+                  Privacy Policy - Coming Soon
+                </span>
               </li>
               <li>
-                <Link href="/contact" className="text-sm text-[var(--muted)] hover:text-white transition-colors">
-                  Contact Us
-                </Link>
+                <span className="text-sm text-[var(--muted)]">
+                  Contact Us - Coming Soon
+                </span>
               </li>
             </ul>
           </div>
@@ -67,7 +67,7 @@ export function Footer() {
         {/* Bottom Bar */}
         <div className="mt-10 pt-6 border-t border-[var(--border)] text-center">
           <p className="text-xs text-[var(--muted)]">
-            &copy; 2024 NovaFlix. All rights reserved.
+            &copy; {new Date().getFullYear()} NovaFlix. All rights reserved.
           </p>
         </div>
       </div>

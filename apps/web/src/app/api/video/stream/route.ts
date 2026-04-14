@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
 
     const [signedUrl] = await file.getSignedUrl({
       action: "read",
-      expires: Date.now() + 4 * 60 * 60 * 1000, // 4 hours
+      expires: Date.now() + 1 * 60 * 60 * 1000, // 1 hour
     });
 
     return NextResponse.json({ url: signedUrl });

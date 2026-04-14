@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
 
     // Verify OTP via MSG91
     const response = await fetch(
-      `https://control.msg91.com/api/v5/otp/verify?mobile=${phone}&otp=${otp}`,
+      `https://control.msg91.com/api/v5/otp/verify?mobile=${encodeURIComponent(phone)}&otp=${encodeURIComponent(otp)}`,
       {
         method: "POST",
         headers: {

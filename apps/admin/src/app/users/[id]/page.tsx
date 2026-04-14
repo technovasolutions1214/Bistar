@@ -72,7 +72,8 @@ export default function UserDetailPage() {
     if (!user?.subscription) return;
     setSaving(true);
     try {
-      const currentEnd = user.subscription.endDate.toDate();
+      const currentEnd = user.subscription?.endDate?.toDate?.()
+        ?? (user.subscription?.endDate ? new Date(user.subscription.endDate as unknown as string | number) : new Date());
       const newEnd = new Date(currentEnd.getTime() + parseInt(extendDays) * 86400000);
       await updateDoc(doc(db(), "users", userId), {
         "subscription.endDate": Timestamp.fromDate(newEnd),
@@ -248,10 +249,9 @@ export default function UserDetailPage() {
           )}
           </div>
         </div>
-      </div>
 
-      {/* Transaction / Purchase History */}
-      <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl overflow-hidden">
+        {/* Transaction / Purchase History */}
+        <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl overflow-hidden">
         <div className="px-6 py-4 border-b border-[var(--border)]">
           <h3 className="text-lg font-semibold">Purchase History</h3>
           <p className="text-xs text-[var(--muted)] mt-1">All payment transactions initiated or completed by this user</p>
@@ -308,6 +308,7 @@ export default function UserDetailPage() {
             </table>
           </div>
         )}
+        </div>
       </div>
 
       {/* Extend Modal */}

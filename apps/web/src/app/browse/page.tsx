@@ -81,7 +81,7 @@ export default function BrowsePage() {
         results = results.filter(
           (item) =>
             item.title.toLowerCase().includes(term) ||
-            item.description.toLowerCase().includes(term)
+            item.description?.toLowerCase().includes(term)
         );
       }
 
@@ -214,7 +214,7 @@ export default function BrowsePage() {
                   {item.title}
                 </h3>
                 <p className="text-xs text-[var(--muted)] mt-0.5">
-                  {item.genre.slice(0, 2).join(", ")}
+                  {(item.genre ?? []).slice(0, 2).join(", ")}
                 </p>
               </Link>
             ))}

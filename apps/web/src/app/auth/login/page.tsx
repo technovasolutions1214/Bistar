@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   GoogleAuthProvider,
@@ -21,10 +21,17 @@ export default function LoginPage() {
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [redirecting, setRedirecting] = useState(false);
 
   // Redirect if already logged in
-  if (firebaseUser) {
-    router.replace("/");
+  useEffect(() => {
+    if (firebaseUser) {
+      setRedirecting(true);
+      router.replace("/");
+    }
+  }, [firebaseUser, router]);
+
+  if (redirecting || firebaseUser) {
     return null;
   }
 

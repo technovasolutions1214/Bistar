@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 export async function POST(request: NextRequest) {
   try {
@@ -78,8 +78,8 @@ export async function POST(request: NextRequest) {
           planId,
           planName: plan.name,
           status: "active",
-          startDate: now,
-          endDate,
+          startDate: Timestamp.fromDate(now),
+          endDate: Timestamp.fromDate(endDate),
           transactionId,
         },
         updatedAt: FieldValue.serverTimestamp(),
