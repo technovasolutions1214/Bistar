@@ -41,9 +41,11 @@ export async function POST(request: NextRequest) {
     let decodedToken;
     try {
       decodedToken = await getAdminAuth().verifyIdToken(token);
-    } catch {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("PayU create: token verification failed:", message);
       return NextResponse.json(
-        { error: "Invalid or expired auth token" },
+        { error: "Invalid or expired auth token", detail: message },
         { status: 401 }
       );
     }
