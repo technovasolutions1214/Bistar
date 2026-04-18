@@ -8,14 +8,12 @@ import {
   where,
   orderBy,
   getDocs,
-  doc,
-  getDoc,
 } from "firebase/firestore";
 import { db } from "@novaflix/firebase-config";
 import { Loader } from "@novaflix/ui";
 import { useAuth } from "@/lib/auth-context";
 
-import type { Plan, PaymentSettings } from "@novaflix/shared";
+import type { Plan } from "@novaflix/shared";
 
 export default function PlansPage() {
   const router = useRouter();
@@ -23,6 +21,7 @@ export default function PlansPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [processingPlanId, setProcessingPlanId] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchPlans() {
@@ -51,28 +50,33 @@ export default function PlansPage() {
     }
 
     setError(null);
+    setProcessingPlanId(plan.id);
+
     try {
-      // Fetch payment gateway URL
-      const paymentDoc = await getDoc(doc(db(), "settings", "payment"));
-      if (!paymentDoc.exists()) {
-        setError("Payment gateway not configured. Please contact support.");
+      const token = await firebaseUser.getIdToken();
+      const res = await fetch("/api/payment/payu/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ planId: plan.id }),
+      });
+
+      const body = await res.json();
+
+      if (!res.ok || !body.paymentUrl) {
+        setError(body.error || "Failed to start payment. Please try again.");
+        setProcessingPlanId(null);
         return;
       }
 
-      const settings = paymentDoc.data() as PaymentSettings;
-      const params = new URLSearchParams({
-        userId: firebaseUser.uid,
-        planId: plan.id,
-        amount: plan.price.toString(),
-        name: userData.displayName || "",
-        email: userData.email || "",
-        phone: userData.phone || "",
-      });
-
-      window.location.href = `${settings.gatewayUrl}?${params.toString()}`;
-    } catch (error) {
-      console.error("Failed to initiate payment:", error);
+      // Redirect to PayU (via flix.cinestry.com)
+      window.location.href = body.paymentUrl;
+    } catch (err) {
+      console.error("Failed to initiate payment:", err);
       setError("Something went wrong. Please try again.");
+      setProcessingPlanId(null);
     }
   }
 
@@ -187,16 +191,28 @@ export default function PlansPage() {
 
                   <button
                     onClick={() => handleSubscribe(plan)}
-                    disabled={isCurrent}
-                    className={`w-full py-3 rounded-lg font-medium text-sm transition-colors ${
+                    disabled={isCurrent || processingPlanId === plan.id}
+                    className={`w-full py-3 rounded-lg font-medium text-sm transition-colors flex items-center justify-center gap-2 ${
                       isCurrent
                         ? "bg-green-500/20 text-green-400 cursor-not-allowed"
-                        : isPopular
-                          ? "bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)]"
-                          : "bg-white/10 text-white hover:bg-white/20"
+                        : processingPlanId === plan.id
+                          ? "bg-[var(--card-hover)] text-[var(--muted)] cursor-wait"
+                          : isPopular
+                            ? "bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)]"
+                            : "bg-white/10 text-white hover:bg-white/20"
                     }`}
                   >
-                    {isCurrent ? "Current Plan" : "Subscribe"}
+                    {processingPlanId === plan.id && (
+                      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                    )}
+                    {isCurrent
+                      ? "Current Plan"
+                      : processingPlanId === plan.id
+                        ? "Redirecting…"
+                        : "Subscribe"}
                   </button>
                 </div>
               );

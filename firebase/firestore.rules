@@ -69,8 +69,10 @@ service cloud.firestore {
     // ---------- Settings ----------
 
     match /settings/{settingId} {
-      // Payment settings are admin-only; general settings are public read
-      allow read: if settingId != "payment" || isAdmin();
+      // Sensitive settings (secrets) are admin-only read
+      // Public-readable settings: general, site
+      // Admin-only settings: payment, payu, msg91
+      allow read: if settingId in ["general", "site"] || isAdmin();
       allow create, update, delete: if isAdmin();
     }
 

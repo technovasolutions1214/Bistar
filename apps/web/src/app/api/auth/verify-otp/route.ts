@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminAuth } from "@/lib/firebase-admin";
+import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 import { rateLimit } from "@/lib/rate-limit";
+
+async function getMsg91AuthKey(): Promise<string | undefined> {
+  try {
+    const snap = await getAdminDb().collection("settings").doc("msg91").get();
+    if (snap.exists) {
+      const data = snap.data() as { authKey?: string };
+      if (data.authKey) return data.authKey;
+    }
+  } catch (err) {
+    console.warn("Failed to read MSG91 settings from Firestore:", err);
+  }
+  return process.env.MSG91_AUTH_KEY;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,7 +26,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Rate limit: 10 requests per 10 minutes per phone
+    if (!/^\+?[1-9]\d{6,14}$/.test(phone)) {
+      return NextResponse.json(
+        { error: "Invalid phone number format" },
+        { status: 400 }
+      );
+    }
+
     const { success: allowed } = rateLimit(`verify-otp:${phone}`, 10, 10 * 60 * 1000);
     if (!allowed) {
       return NextResponse.json(
@@ -22,16 +41,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const authKey = process.env.MSG91_AUTH_KEY;
+    const authKey = await getMsg91AuthKey();
 
     if (!authKey) {
       return NextResponse.json(
-        { error: "OTP service not configured" },
+        { error: "OTP service is not configured. Please contact support." },
         { status: 500 }
       );
     }
 
-    // Verify OTP via MSG91
     const response = await fetch(
       `https://control.msg91.com/api/v5/otp/verify?mobile=${encodeURIComponent(phone)}&otp=${encodeURIComponent(otp)}`,
       {
@@ -52,13 +70,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create or get Firebase user by phone number
+    // Create or fetch Firebase user by phone number
     let uid: string;
     try {
       const userRecord = await getAdminAuth().getUserByPhoneNumber(phone);
       uid = userRecord.uid;
     } catch {
-      // User doesn't exist, create new one
       const newUser = await getAdminAuth().createUser({
         phoneNumber: phone,
         displayName: phone,
@@ -66,7 +83,6 @@ export async function POST(request: NextRequest) {
       uid = newUser.uid;
     }
 
-    // Generate custom token for client sign-in
     const token = await getAdminAuth().createCustomToken(uid);
 
     return NextResponse.json({ token, uid });

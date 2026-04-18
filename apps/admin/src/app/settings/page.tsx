@@ -17,11 +17,6 @@ import { AdminLayout } from "@/components/admin-layout";
 import { useAuth } from "@/lib/auth-context";
 import { Button, Input, Loader, Modal, useToast } from "@novaflix/ui";
 
-interface PaymentParam {
-  key: string;
-  value: string;
-}
-
 interface AdminUser {
   uid: string;
   email?: string;
@@ -38,9 +33,17 @@ export default function SettingsPage() {
   // Content access settings
   const [requireSubscriptionToBrowse, setRequireSubscriptionToBrowse] = useState(false);
 
-  // Payment settings
-  const [gatewayUrl, setGatewayUrl] = useState("");
-  const [paymentParams, setPaymentParams] = useState<PaymentParam[]>([]);
+  // MSG91 settings
+  const [msg91AuthKey, setMsg91AuthKey] = useState("");
+  const [msg91TemplateId, setMsg91TemplateId] = useState("");
+  const [msg91SenderId, setMsg91SenderId] = useState("");
+
+  // PayU settings
+  const [payuKey, setPayuKey] = useState("");
+  const [payuSalt, setPayuSalt] = useState("");
+  const [payuPaymentUrl, setPayuPaymentUrl] = useState("https://flix.cinestry.com/payu.html");
+  const [payuStatusUrl, setPayuStatusUrl] = useState("https://flix.cinestry.com/payu-payment-status.html");
+  const [payuProductInfo, setPayuProductInfo] = useState("cinestrydays-1415221612924");
 
   // Site settings
   const [siteName, setSiteName] = useState("");
@@ -60,19 +63,11 @@ export default function SettingsPage() {
   useEffect(() => {
     async function fetchSettings() {
       try {
-        const [paymentSnap, generalSnap] = await Promise.all([
-          getDoc(doc(db(), "settings", "payment")),
+        const [generalSnap, msg91Snap, payuSnap] = await Promise.all([
           getDoc(doc(db(), "settings", "general")),
+          getDoc(doc(db(), "settings", "msg91")),
+          getDoc(doc(db(), "settings", "payu")),
         ]);
-
-        if (paymentSnap.exists()) {
-          const data = paymentSnap.data();
-          setGatewayUrl(data.gatewayUrl || "");
-          const params = data.params || {};
-          setPaymentParams(
-            Object.entries(params).map(([key, value]) => ({ key, value: value as string }))
-          );
-        }
 
         if (generalSnap.exists()) {
           const data = generalSnap.data();
@@ -80,14 +75,31 @@ export default function SettingsPage() {
           setExistingLogo(data.logo || "");
           setRequireSubscriptionToBrowse(data.requireSubscriptionToBrowse ?? false);
         }
+
+        if (msg91Snap.exists()) {
+          const data = msg91Snap.data();
+          setMsg91AuthKey(data.authKey || "");
+          setMsg91TemplateId(data.templateId || "");
+          setMsg91SenderId(data.senderId || "");
+        }
+
+        if (payuSnap.exists()) {
+          const data = payuSnap.data();
+          setPayuKey(data.key || "");
+          setPayuSalt(data.salt || "");
+          setPayuPaymentUrl(data.paymentUrl || "https://flix.cinestry.com/payu.html");
+          setPayuStatusUrl(data.statusUrl || "https://flix.cinestry.com/payu-payment-status.html");
+          setPayuProductInfo(data.productInfo || "cinestrydays-1415221612924");
+        }
       } catch (err) {
         console.error("Failed to fetch settings:", err);
+        toast.error("Failed to load settings");
       } finally {
         setLoading(false);
       }
     }
     fetchSettings();
-  }, []);
+  }, [toast]);
 
   const fetchAdmins = useCallback(async () => {
     setAdminsLoading(true);
@@ -130,13 +142,11 @@ export default function SettingsPage() {
         return;
       }
 
-      // Check if user already exists in Firestore
       const field = isEmail ? "email" : "phone";
       const q = query(collection(db(), "users"), where(field, "==", input));
       const snap = await getDocs(q);
 
       if (!snap.empty) {
-        // User exists — update their role
         const userDoc = snap.docs[0];
         if (userDoc.data().role === "admin") {
           setAddAdminError("This user is already an admin.");
@@ -146,7 +156,6 @@ export default function SettingsPage() {
         await updateDoc(doc(db(), "users", userDoc.id), { role: "admin", updatedAt: serverTimestamp() });
         toast.success(`${input} has been promoted to admin.`);
       } else {
-        // User doesn't exist yet — pre-create their doc so when they sign in they'll be admin
         const newDocRef = doc(collection(db(), "users"));
         await setDoc(newDocRef, {
           ...(isEmail ? { email: input } : { phone: input }),
@@ -185,20 +194,6 @@ export default function SettingsPage() {
     }
   };
 
-  const addParam = () => {
-    setPaymentParams([...paymentParams, { key: "", value: "" }]);
-  };
-
-  const removeParam = (index: number) => {
-    setPaymentParams(paymentParams.filter((_, i) => i !== index));
-  };
-
-  const updateParam = (index: number, field: "key" | "value", val: string) => {
-    const updated = [...paymentParams];
-    updated[index][field] = val;
-    setPaymentParams(updated);
-  };
-
   const handleSave = async () => {
     setSaving(true);
 
@@ -216,22 +211,25 @@ export default function SettingsPage() {
         });
       }
 
-      // Save payment settings
-      const paramsObj: Record<string, string> = {};
-      paymentParams.forEach((p) => {
-        if (p.key.trim()) paramsObj[p.key.trim()] = p.value;
-      });
-
       await Promise.all([
-        setDoc(doc(db(), "settings", "payment"), {
-          gatewayUrl,
-          params: paramsObj,
-          updatedAt: serverTimestamp(),
-        }, { merge: true }),
         setDoc(doc(db(), "settings", "general"), {
           siteName: siteName.trim(),
           logo: logoUrl,
           requireSubscriptionToBrowse,
+          updatedAt: serverTimestamp(),
+        }, { merge: true }),
+        setDoc(doc(db(), "settings", "msg91"), {
+          authKey: msg91AuthKey.trim(),
+          templateId: msg91TemplateId.trim(),
+          senderId: msg91SenderId.trim(),
+          updatedAt: serverTimestamp(),
+        }, { merge: true }),
+        setDoc(doc(db(), "settings", "payu"), {
+          key: payuKey.trim(),
+          salt: payuSalt.trim(),
+          paymentUrl: payuPaymentUrl.trim(),
+          statusUrl: payuStatusUrl.trim(),
+          productInfo: payuProductInfo.trim(),
           updatedAt: serverTimestamp(),
         }, { merge: true }),
       ]);
@@ -290,58 +288,104 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Payment Gateway */}
+        {/* MSG91 SMS / OTP Settings */}
         <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-6 space-y-4">
-          <h2 className="text-lg font-semibold">Payment Gateway</h2>
+          <div>
+            <h2 className="text-lg font-semibold">MSG91 (Phone OTP)</h2>
+            <p className="text-xs text-[var(--muted)] mt-1">
+              Credentials for sending OTP SMS. Get these from your MSG91 dashboard.
+            </p>
+          </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">Gateway URL</label>
+            <label className="block text-sm font-medium mb-2">Auth Key</label>
             <Input
-              value={gatewayUrl}
-              onChange={(e) => setGatewayUrl(e.target.value)}
-              placeholder="https://payment-gateway.example.com/api"
+              value={msg91AuthKey}
+              onChange={(e) => setMsg91AuthKey(e.target.value)}
+              placeholder="Your MSG91 Auth Key"
+              type="password"
             />
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium">Additional Parameters</label>
-              <button
-                onClick={addParam}
-                className="text-xs text-[var(--primary)] hover:text-[var(--primary-hover)] transition-colors"
-              >
-                + Add Parameter
-              </button>
-            </div>
-            <div className="space-y-2">
-              {paymentParams.map((param, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <Input
-                    value={param.key}
-                    onChange={(e) => updateParam(index, "key", e.target.value)}
-                    placeholder="Key"
-                    className="flex-1"
-                  />
-                  <Input
-                    value={param.value}
-                    onChange={(e) => updateParam(index, "value", e.target.value)}
-                    placeholder="Value"
-                    className="flex-1"
-                  />
-                  <button
-                    onClick={() => removeParam(index)}
-                    className="p-2 rounded-lg hover:bg-[var(--danger)]/10 text-[var(--muted)] hover:text-[var(--danger)] transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              ))}
-              {paymentParams.length === 0 && (
-                <p className="text-sm text-[var(--muted)] py-2">No additional parameters. Click &quot;Add Parameter&quot; to add one.</p>
-              )}
-            </div>
+            <label className="block text-sm font-medium mb-2">Template ID</label>
+            <Input
+              value={msg91TemplateId}
+              onChange={(e) => setMsg91TemplateId(e.target.value)}
+              placeholder="MSG91 DLT Template ID"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Sender ID (optional)</label>
+            <Input
+              value={msg91SenderId}
+              onChange={(e) => setMsg91SenderId(e.target.value)}
+              placeholder="e.g. NOVAFX"
+            />
+          </div>
+        </div>
+
+        {/* PayU Payment Settings */}
+        <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-6 space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold">PayU Payment Gateway</h2>
+            <p className="text-xs text-[var(--muted)] mt-1">
+              Payment is routed through{" "}
+              <code className="text-[var(--primary)]">flix.cinestry.com</code> which forwards to PayU.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Merchant Key</label>
+            <Input
+              value={payuKey}
+              onChange={(e) => setPayuKey(e.target.value)}
+              placeholder="e.g. rZFKW5"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Salt</label>
+            <Input
+              value={payuSalt}
+              onChange={(e) => setPayuSalt(e.target.value)}
+              placeholder="PayU Merchant Salt"
+              type="password"
+            />
+            <p className="text-xs text-[var(--muted)] mt-1">
+              Used to generate the hash. Never exposed to the client.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Product Info</label>
+            <Input
+              value={payuProductInfo}
+              onChange={(e) => setPayuProductInfo(e.target.value)}
+              placeholder="cinestrydays-1415221612924"
+            />
+            <p className="text-xs text-[var(--muted)] mt-1">
+              Identifies this app on the payment gateway. Default is the NovaFlix code.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Payment URL</label>
+            <Input
+              value={payuPaymentUrl}
+              onChange={(e) => setPayuPaymentUrl(e.target.value)}
+              placeholder="https://flix.cinestry.com/payu.html"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Status / Callback URL</label>
+            <Input
+              value={payuStatusUrl}
+              onChange={(e) => setPayuStatusUrl(e.target.value)}
+              placeholder="https://flix.cinestry.com/payu-payment-status.html"
+            />
           </div>
         </div>
 
@@ -362,6 +406,7 @@ export default function SettingsPage() {
             <label className="block text-sm font-medium mb-2">Logo</label>
             <div className="flex items-center gap-4">
               {(logoPreview || existingLogo) && (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={logoPreview || existingLogo}
                   alt="Logo"
@@ -416,7 +461,6 @@ export default function SettingsPage() {
             <p className="text-sm text-[var(--danger)]">{addAdminError}</p>
           )}
 
-          {/* Admin list */}
           <div className="mt-4">
             <h3 className="text-sm font-medium text-[var(--muted)] mb-3">Current Admins</h3>
             {adminsLoading ? (
@@ -463,7 +507,6 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Remove Admin Confirmation Modal */}
         <Modal
           isOpen={!!removeModalUid}
           onClose={() => setRemoveModalUid(null)}
@@ -483,7 +526,6 @@ export default function SettingsPage() {
           </div>
         </Modal>
 
-        {/* Save */}
         <div className="flex items-center justify-end gap-3">
           <Button loading={saving} onClick={handleSave} size="lg">
             Save Settings
