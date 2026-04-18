@@ -146,14 +146,16 @@ export default function AccountPage() {
 
           {subscription && isActive ? (
             <div className="space-y-4">
+              {subscription.planName && (
+                <div className="flex justify-between">
+                  <span className="text-sm text-[var(--muted)]">Last Package</span>
+                  <span className="text-sm font-medium">
+                    {subscription.planName}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between">
-                <span className="text-sm text-[var(--muted)]">Plan</span>
-                <span className="text-sm font-medium">
-                  {subscription.planName}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-[var(--muted)]">Start Date</span>
+                <span className="text-sm text-[var(--muted)]">Started</span>
                 <span className="text-sm font-medium">
                   {formatDate(subscription.startDate)}
                 </span>
@@ -205,7 +207,7 @@ export default function AccountPage() {
               href="/plans"
               className="inline-block px-5 py-2.5 bg-[var(--primary)] text-white text-sm font-medium rounded-lg hover:bg-[var(--primary-hover)] transition-colors"
             >
-              {isActive ? "Manage Subscription" : "Subscribe Now"}
+              {isActive ? "Add More Days" : "Subscribe Now"}
             </Link>
           </div>
         </section>

@@ -22,7 +22,7 @@ export default function UserDetailPage() {
 
   // Modals
   const [showExtend, setShowExtend] = useState(false);
-  const [showChangePlan, setShowChangePlan] = useState(false);
+  const [showGrantPackage, setShowGrantPackage] = useState(false);
   const [showCancel, setShowCancel] = useState(false);
 
   // Form state
@@ -91,30 +91,43 @@ export default function UserDetailPage() {
     }
   };
 
-  const handleChangePlan = async () => {
+  const handleGrantPackage = async () => {
     if (!selectedPlanId) return;
     setSaving(true);
     try {
       const plan = plans.find((p) => p.id === selectedPlanId);
       if (!plan) return;
+
       const now = new Date();
-      const end = new Date(now.getTime() + plan.duration * 86400000);
+
+      // Stack days: start from existing end date if still active, else from now
+      let startFrom = now;
+      const existingEnd = user?.subscription?.endDate?.toDate?.();
+      if (
+        user?.subscription?.status === "active" &&
+        existingEnd instanceof Date &&
+        existingEnd > now
+      ) {
+        startFrom = existingEnd;
+      }
+      const newEnd = new Date(startFrom.getTime() + plan.duration * 86400000);
+
       await updateDoc(doc(db(), "users", userId), {
         subscription: {
           planId: plan.id,
           planName: plan.name,
           status: "active",
           startDate: Timestamp.fromDate(now),
-          endDate: Timestamp.fromDate(end),
+          endDate: Timestamp.fromDate(newEnd),
         },
         updatedAt: serverTimestamp(),
       });
       await fetchUser();
-      setShowChangePlan(false);
-      toast.success("Plan changed successfully");
+      setShowGrantPackage(false);
+      toast.success(`Granted ${plan.duration} days to the user.`);
     } catch (err) {
-      console.error("Failed to change plan:", err);
-      toast.error("Failed to change plan");
+      console.error("Failed to grant package:", err);
+      toast.error("Failed to grant package");
     } finally {
       setSaving(false);
     }
@@ -213,8 +226,8 @@ export default function UserDetailPage() {
             <>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div className="p-3 rounded-lg bg-[var(--background)]">
-                  <p className="text-xs text-[var(--muted)]">Plan</p>
-                  <p className="text-sm font-medium mt-1">{sub.planName}</p>
+                  <p className="text-xs text-[var(--muted)]">Last Package</p>
+                  <p className="text-sm font-medium mt-1">{sub.planName || "—"}</p>
                 </div>
                 <div className="p-3 rounded-lg bg-[var(--background)]">
                   <p className="text-xs text-[var(--muted)]">Status</p>
@@ -223,27 +236,27 @@ export default function UserDetailPage() {
                   }`}>{sub.status}</p>
                 </div>
                 <div className="p-3 rounded-lg bg-[var(--background)]">
-                  <p className="text-xs text-[var(--muted)]">Start Date</p>
+                  <p className="text-xs text-[var(--muted)]">Started On</p>
                   <p className="text-sm font-medium mt-1">{sub.startDate?.toDate?.()?.toLocaleDateString() || "N/A"}</p>
                 </div>
                 <div className="p-3 rounded-lg bg-[var(--background)]">
-                  <p className="text-xs text-[var(--muted)]">End Date</p>
+                  <p className="text-xs text-[var(--muted)]">Expires On</p>
                   <p className="text-sm font-medium mt-1">{sub.endDate?.toDate?.()?.toLocaleDateString() || "N/A"}</p>
                 </div>
               </div>
 
               {/* Actions */}
               <div className="flex flex-wrap gap-3 pt-4 border-t border-[var(--border)]">
-                <Button size="sm" onClick={() => setShowExtend(true)}>Extend Subscription</Button>
-                <Button size="sm" variant="secondary" onClick={() => setShowChangePlan(true)}>Change Plan</Button>
+                <Button size="sm" onClick={() => setShowExtend(true)}>Extend by Days</Button>
+                <Button size="sm" variant="secondary" onClick={() => { setSelectedPlanId(plans[0]?.id || ""); setShowGrantPackage(true); }}>Grant Package</Button>
                 <Button size="sm" variant="danger" onClick={() => setShowCancel(true)}>Cancel Subscription</Button>
               </div>
             </>
           ) : (
             <div className="text-center py-6">
               <p className="text-[var(--muted)] text-sm">No active subscription.</p>
-              <Button size="sm" className="mt-3" onClick={() => { setSelectedPlanId(plans[0]?.id || ""); setShowChangePlan(true); }}>
-                Assign Plan
+              <Button size="sm" className="mt-3" onClick={() => { setSelectedPlanId(plans[0]?.id || ""); setShowGrantPackage(true); }}>
+                Grant Package
               </Button>
             </div>
           )}
@@ -336,25 +349,28 @@ export default function UserDetailPage() {
         </div>
       </Modal>
 
-      {/* Change Plan Modal */}
-      <Modal isOpen={showChangePlan} onClose={() => setShowChangePlan(false)} title="Change Plan" size="sm">
+      {/* Grant Package Modal */}
+      <Modal isOpen={showGrantPackage} onClose={() => setShowGrantPackage(false)} title="Grant Package" size="sm">
         <div className="space-y-4">
+          <p className="text-sm text-[var(--muted)]">
+            The package&apos;s days will be added to the user&apos;s current subscription. If they have active days remaining, the new days stack on top of those.
+          </p>
           <div>
-            <label className="block text-sm font-medium mb-2">Select Plan</label>
+            <label className="block text-sm font-medium mb-2">Select Package</label>
             <select
               value={selectedPlanId}
               onChange={(e) => setSelectedPlanId(e.target.value)}
               className="w-full px-4 py-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
             >
-              <option value="">Select a plan</option>
+              <option value="">Select a package</option>
               {plans.filter((p) => p.isActive).map((plan) => (
-                <option key={plan.id} value={plan.id}>{plan.name} - ${plan.price} / {plan.duration} days</option>
+                <option key={plan.id} value={plan.id}>{plan.name} — {plan.duration} days</option>
               ))}
             </select>
           </div>
           <div className="flex justify-end gap-3">
-            <Button variant="secondary" onClick={() => setShowChangePlan(false)}>Cancel</Button>
-            <Button loading={saving} onClick={handleChangePlan} disabled={!selectedPlanId}>Change Plan</Button>
+            <Button variant="secondary" onClick={() => setShowGrantPackage(false)}>Cancel</Button>
+            <Button loading={saving} onClick={handleGrantPackage} disabled={!selectedPlanId}>Grant Package</Button>
           </div>
         </div>
       </Modal>

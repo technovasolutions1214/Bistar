@@ -23,7 +23,7 @@ interface GeneralSettings {
 
 export default function ContentDetailPage() {
   const params = useParams<{ id: string }>();
-  const { userData, loading: authLoading } = useAuth();
+  const { hasActiveSubscription, loading: authLoading } = useAuth();
   const [content, setContent] = useState<Content | null>(null);
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,13 +81,6 @@ export default function ContentDetailPage() {
       </div>
     );
   }
-
-  const userPlan = userData?.subscription?.planId;
-  const isSubscribed =
-    userData?.subscription?.status === "active" &&
-    userPlan === content.requiredPlan;
-  const hasAnyActiveSubscription =
-    userData?.subscription?.status === "active";
 
   function formatDuration(seconds: number): string {
     const mins = Math.floor(seconds / 60);
@@ -150,7 +143,7 @@ export default function ContentDetailPage() {
         </p>
 
         {/* Subscription Prompt */}
-        {!hasAnyActiveSubscription && (
+        {!hasActiveSubscription && (
           <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-6 mb-8">
             <h3 className="text-lg font-semibold mb-2">
               Subscribe to watch
@@ -163,29 +156,6 @@ export default function ContentDetailPage() {
                 View Plans
               </Button>
             </Link>
-          </div>
-        )}
-
-        {hasAnyActiveSubscription && !isSubscribed && (
-          <div className="relative bg-[var(--card)] rounded-xl p-6 mb-8 overflow-hidden">
-            {/* Gradient border effect */}
-            <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-[var(--primary)] via-orange-500 to-[var(--primary)] p-[1px]">
-              <div className="w-full h-full bg-[var(--card)] rounded-xl" />
-            </div>
-            <div className="relative z-10">
-              <h3 className="text-lg font-semibold mb-2">
-                Upgrade your plan
-              </h3>
-              <p className="text-sm text-[var(--muted)] mb-4">
-                This content requires a higher subscription plan. Upgrade now to
-                start watching.
-              </p>
-              <Link href="/plans">
-                <Button className="bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white px-6 py-2.5 rounded-lg font-medium">
-                  Upgrade Plan
-                </Button>
-              </Link>
-            </div>
           </div>
         )}
 
@@ -235,7 +205,7 @@ export default function ContentDetailPage() {
                   </div>
 
                   {/* Play Button */}
-                  {isSubscribed || hasAnyActiveSubscription ? (
+                  {hasActiveSubscription ? (
                     <Link
                       href={`/watch/${content.id}/${video.id}`}
                       className="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] hover:scale-110 transition-all duration-200"

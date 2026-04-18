@@ -80,9 +80,21 @@ export default function PlansPage() {
     }
   }
 
-  const activePlanId = userData?.subscription?.status === "active"
-    ? userData.subscription.planId
-    : null;
+  // Compute remaining days for the current subscription (if any)
+  const subscription = userData?.subscription;
+  const remainingDays = (() => {
+    if (!subscription || subscription.status !== "active") return 0;
+    const endDate =
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (subscription.endDate as any)?.toDate?.() ??
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      new Date(subscription.endDate as any);
+    if (!(endDate instanceof Date) || isNaN(endDate.getTime())) return 0;
+    const diff = endDate.getTime() - Date.now();
+    return diff > 0 ? Math.ceil(diff / (1000 * 60 * 60 * 24)) : 0;
+  })();
+
+  const hasActiveSub = remainingDays > 0;
 
   if (loading || authLoading) {
     return (
@@ -96,14 +108,35 @@ export default function PlansPage() {
   const popularIndex = Math.floor(plans.length / 2);
 
   return (
-    <div className="min-h-screen pt-20 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto">
-      <div className="text-center mb-12">
-        <h1 className="text-3xl font-bold mb-3">Choose Your Plan</h1>
-        <p className="text-[var(--muted)] max-w-md mx-auto">
-          Pick a plan that works for you. Enjoy unlimited streaming with any
-          subscription.
+    <div className="min-h-screen pt-20 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto pb-20">
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-bold mb-3">
+          {hasActiveSub ? "Extend Your Subscription" : "Get a Subscription"}
+        </h1>
+        <p className="text-[var(--muted)] max-w-lg mx-auto">
+          Buy any package to add more days to your subscription. Packs stack —
+          purchase as many as you want.
         </p>
       </div>
+
+      {/* Current subscription status banner */}
+      {hasActiveSub && (
+        <div className="mb-8 max-w-xl mx-auto p-4 bg-[var(--primary)]/10 border border-[var(--primary)]/30 rounded-xl flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-[var(--primary)]/20 flex items-center justify-center flex-shrink-0">
+              <svg className="w-5 h-5 text-[var(--primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-semibold">Your subscription is active</p>
+              <p className="text-xs text-[var(--muted)]">
+                {remainingDays} {remainingDays === 1 ? "day" : "days"} remaining
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="mb-8 max-w-md mx-auto p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-400 text-center">
@@ -125,7 +158,9 @@ export default function PlansPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-4xl mx-auto">
             {plans.map((plan, index) => {
               const isPopular = index === popularIndex && plans.length > 1;
-              const isCurrent = activePlanId === plan.id;
+              const pricePerDay = plan.duration > 0
+                ? (plan.price / plan.duration).toFixed(2)
+                : null;
 
               return (
                 <div
@@ -139,14 +174,7 @@ export default function PlansPage() {
                   {/* Popular Badge */}
                   {isPopular && (
                     <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-5 py-1.5 bg-gradient-to-r from-[var(--primary)] to-orange-500 text-white text-xs font-bold rounded-full uppercase tracking-wider">
-                      Most Popular
-                    </div>
-                  )}
-
-                  {/* Current Plan Badge */}
-                  {isCurrent && (
-                    <div className="absolute -top-3 right-4 px-3 py-1 bg-green-500 text-white text-xs font-semibold rounded-full">
-                      Current Plan
+                      Best Value
                     </div>
                   )}
 
@@ -155,7 +183,7 @@ export default function PlansPage() {
                     {plan.description}
                   </p>
 
-                  <div className="mb-6">
+                  <div className="mb-2">
                     <span className="text-sm text-[var(--muted)] align-top">
                       {plan.currency === "INR" ? "\u20B9" : "$"}
                     </span>
@@ -163,9 +191,14 @@ export default function PlansPage() {
                       {plan.price}
                     </span>
                     <span className="text-sm text-[var(--muted)] ml-1">
-                      / {plan.duration} days
+                      / {plan.duration} {plan.duration === 1 ? "day" : "days"}
                     </span>
                   </div>
+                  {pricePerDay && (
+                    <p className="text-xs text-[var(--muted)] mb-6">
+                      {plan.currency === "INR" ? "\u20B9" : "$"}{pricePerDay} per day
+                    </p>
+                  )}
 
                   {/* Features */}
                   <ul className="space-y-3 mb-8 flex-1">
@@ -191,15 +224,13 @@ export default function PlansPage() {
 
                   <button
                     onClick={() => handleSubscribe(plan)}
-                    disabled={isCurrent || processingPlanId === plan.id}
+                    disabled={processingPlanId === plan.id}
                     className={`w-full py-3 rounded-lg font-medium text-sm transition-colors flex items-center justify-center gap-2 ${
-                      isCurrent
-                        ? "bg-green-500/20 text-green-400 cursor-not-allowed"
-                        : processingPlanId === plan.id
-                          ? "bg-[var(--card-hover)] text-[var(--muted)] cursor-wait"
-                          : isPopular
-                            ? "bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)]"
-                            : "bg-white/10 text-white hover:bg-white/20"
+                      processingPlanId === plan.id
+                        ? "bg-[var(--card-hover)] text-[var(--muted)] cursor-wait"
+                        : isPopular
+                          ? "bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)]"
+                          : "bg-white/10 text-white hover:bg-white/20"
                     }`}
                   >
                     {processingPlanId === plan.id && (
@@ -208,11 +239,11 @@ export default function PlansPage() {
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
                     )}
-                    {isCurrent
-                      ? "Current Plan"
-                      : processingPlanId === plan.id
-                        ? "Redirecting…"
-                        : "Subscribe"}
+                    {processingPlanId === plan.id
+                      ? "Redirecting\u2026"
+                      : hasActiveSub
+                        ? `Add ${plan.duration} ${plan.duration === 1 ? "day" : "days"}`
+                        : `Get ${plan.duration} ${plan.duration === 1 ? "day" : "days"}`}
                   </button>
                 </div>
               );

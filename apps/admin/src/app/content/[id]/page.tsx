@@ -18,7 +18,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@novaflix/firebase-config";
 import { AdminLayout } from "@/components/admin-layout";
 import { Button, Input, Loader, Modal, useToast } from "@novaflix/ui";
-import { GENRES, type Content, type Video, type Plan } from "@novaflix/shared";
+import { GENRES, type Content, type Video } from "@novaflix/shared";
 
 export default function EditContentPage() {
   const router = useRouter();
@@ -28,7 +28,6 @@ export default function EditContentPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [plans, setPlans] = useState<Plan[]>([]);
 
   // Content form
   const [title, setTitle] = useState("");
@@ -36,7 +35,6 @@ export default function EditContentPage() {
   const [type, setType] = useState<"movie" | "series">("movie");
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [rating, setRating] = useState("");
-  const [requiredPlan, setRequiredPlan] = useState("");
   const [status, setStatus] = useState<"draft" | "published">("draft");
   const [isTrending, setIsTrending] = useState(false);
   const [isFeatured, setIsFeatured] = useState(false);
@@ -60,10 +58,7 @@ export default function EditContentPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [contentSnap, plansSnap] = await Promise.all([
-        getDoc(doc(db(), "content", contentId)),
-        getDocs(collection(db(), "plans")),
-      ]);
+      const contentSnap = await getDoc(doc(db(), "content", contentId));
 
       if (!contentSnap.exists()) {
         router.replace("/content");
@@ -76,13 +71,11 @@ export default function EditContentPage() {
       setType(data.type);
       setSelectedGenres(data.genre || []);
       setRating(data.rating?.toString() || "");
-      setRequiredPlan(data.requiredPlan || "");
       setStatus(data.status);
       setIsTrending(data.isTrending);
       setIsFeatured(data.isFeatured);
       setExistingThumbnail(data.thumbnail || "");
       setExistingBanner(data.banner || "");
-      setPlans(plansSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Plan)));
 
       // Fetch videos
       const videosQuery = query(
@@ -158,7 +151,6 @@ export default function EditContentPage() {
         rating: rating ? parseFloat(rating) : null,
         thumbnail: thumbnailUrl,
         banner: bannerUrl,
-        requiredPlan,
         status,
         isTrending,
         isFeatured,
@@ -416,21 +408,6 @@ export default function EditContentPage() {
                 if (file) { setBannerFile(file); handleFilePreview(file, setBannerPreview); }
               }} />
             </label>
-          </div>
-
-          {/* Required Plan */}
-          <div>
-            <label className="block text-sm font-medium mb-2">Required Plan</label>
-            <select
-              value={requiredPlan}
-              onChange={(e) => setRequiredPlan(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-            >
-              <option value="">Free (No plan required)</option>
-              {plans.map((plan) => (
-                <option key={plan.id} value={plan.id}>{plan.name} - ${plan.price}</option>
-              ))}
-            </select>
           </div>
 
           {/* Toggles */}

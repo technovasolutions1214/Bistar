@@ -1,18 +1,17 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { collection, addDoc, getDocs, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@novaflix/firebase-config";
 import { AdminLayout } from "@/components/admin-layout";
 import { Button, Input, useToast } from "@novaflix/ui";
-import { GENRES, type Plan } from "@novaflix/shared";
+import { GENRES } from "@novaflix/shared";
 
 export default function NewContentPage() {
   const router = useRouter();
   const toast = useToast();
   const [saving, setSaving] = useState(false);
-  const [plans, setPlans] = useState<Plan[]>([]);
 
   // Form state
   const [title, setTitle] = useState("");
@@ -20,7 +19,6 @@ export default function NewContentPage() {
   const [type, setType] = useState<"movie" | "series">("movie");
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [rating, setRating] = useState("");
-  const [requiredPlan, setRequiredPlan] = useState("");
   const [status, setStatus] = useState<"draft" | "published">("draft");
   const [isTrending, setIsTrending] = useState(false);
   const [isFeatured, setIsFeatured] = useState(false);
@@ -30,19 +28,6 @@ export default function NewContentPage() {
   const [thumbnailPreview, setThumbnailPreview] = useState("");
   const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [bannerPreview, setBannerPreview] = useState("");
-
-  useEffect(() => {
-    async function fetchPlans() {
-      try {
-        const snap = await getDocs(collection(db(), "plans"));
-        setPlans(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Plan)));
-      } catch (err) {
-        console.error("Failed to fetch plans:", err);
-        toast.error("Failed to load plans");
-      }
-    }
-    fetchPlans();
-  }, []);
 
   const handleFilePreview = (
     file: File,
@@ -99,7 +84,6 @@ export default function NewContentPage() {
         rating: rating ? parseFloat(rating) : null,
         thumbnail: thumbnailUrl,
         banner: bannerUrl,
-        requiredPlan,
         status,
         isTrending,
         isFeatured,
@@ -269,23 +253,6 @@ export default function NewContentPage() {
                 />
               </label>
             </div>
-          </div>
-
-          {/* Required Plan */}
-          <div>
-            <label className="block text-sm font-medium mb-2">Required Plan</label>
-            <select
-              value={requiredPlan}
-              onChange={(e) => setRequiredPlan(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-            >
-              <option value="">Free (No plan required)</option>
-              {plans.map((plan) => (
-                <option key={plan.id} value={plan.id}>
-                  {plan.name} - ${plan.price}
-                </option>
-              ))}
-            </select>
           </div>
 
           {/* Toggles */}
