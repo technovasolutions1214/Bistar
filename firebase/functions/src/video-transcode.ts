@@ -68,6 +68,7 @@ async function uploadDirectory(localDir: string, destPrefix: string): Promise<vo
     const destPath = `${destPrefix}/${file}`;
     return bucket.upload(localPath, {
       destination: destPath,
+      predefinedAcl: "publicRead",
       metadata: {
         contentType: file.endsWith(".m3u8") ? "application/vnd.apple.mpegurl" : "video/mp2t",
       },
@@ -124,6 +125,7 @@ export const onVideoUploaded = onObjectFinalized(
 
       await bucket.upload(masterPath, {
         destination: `${destPrefix}/master.m3u8`,
+        predefinedAcl: "publicRead",
         metadata: { contentType: "application/vnd.apple.mpegurl" },
       });
 
@@ -132,10 +134,8 @@ export const onVideoUploaded = onObjectFinalized(
         await uploadDirectory(qualityDir, `${destPrefix}/${preset.name}`);
       }
 
-      const cdnDomain = process.env.CDN_DOMAIN || "";
-      const videoUrl = cdnDomain
-        ? `https://${cdnDomain}/${destPrefix}/master.m3u8`
-        : `https://storage.googleapis.com/${bucket.name}/${destPrefix}/master.m3u8`;
+      const cdnDomain = process.env.CDN_DOMAIN || "cdn.novaflix.app";
+      const videoUrl = `https://${cdnDomain}/${destPrefix}/master.m3u8`;
 
       await videoDocRef.set(
         {
