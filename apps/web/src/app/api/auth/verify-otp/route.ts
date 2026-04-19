@@ -17,11 +17,11 @@ async function getMsg91AuthKey(): Promise<string | undefined> {
 
 export async function POST(request: NextRequest) {
   try {
-    const { phone, otp } = await request.json();
+    const { phone, accessToken } = await request.json();
 
-    if (!phone || !otp) {
+    if (!phone || !accessToken) {
       return NextResponse.json(
-        { error: "Phone and OTP are required" },
+        { error: "Phone and accessToken are required" },
         { status: 400 }
       );
     }
@@ -42,7 +42,6 @@ export async function POST(request: NextRequest) {
     }
 
     const authKey = await getMsg91AuthKey();
-
     if (!authKey) {
       return NextResponse.json(
         { error: "OTP service is not configured. Please contact support." },
@@ -51,40 +50,41 @@ export async function POST(request: NextRequest) {
     }
 
     const response = await fetch(
-      `https://control.msg91.com/api/v5/otp/verify?mobile=${encodeURIComponent(phone)}&otp=${encodeURIComponent(otp)}`,
+      "https://control.msg91.com/api/v5/widget/verifyAccessToken",
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          authkey: authKey,
-        },
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ authkey: authKey, "access-token": accessToken }),
       }
     );
-
     const data = await response.json();
 
     if (data.type !== "success") {
+      console.error("MSG91 verifyAccessToken failed", {
+        status: response.status,
+        response: data,
+      });
       return NextResponse.json(
         { error: data.message || "Invalid OTP" },
         { status: 400 }
       );
     }
 
-    // Create or fetch Firebase user by phone number
+    const formattedPhone = phone.startsWith("+") ? phone : `+${phone}`;
+
     let uid: string;
     try {
-      const userRecord = await getAdminAuth().getUserByPhoneNumber(phone);
+      const userRecord = await getAdminAuth().getUserByPhoneNumber(formattedPhone);
       uid = userRecord.uid;
     } catch {
       const newUser = await getAdminAuth().createUser({
-        phoneNumber: phone,
-        displayName: phone,
+        phoneNumber: formattedPhone,
+        displayName: formattedPhone,
       });
       uid = newUser.uid;
     }
 
     const token = await getAdminAuth().createCustomToken(uid);
-
     return NextResponse.json({ token, uid });
   } catch (error) {
     console.error("Verify OTP error:", error);

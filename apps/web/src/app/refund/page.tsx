@@ -7,7 +7,7 @@ export const metadata: Metadata = {
 
 export default function RefundPage() {
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-12">
       <h1 className="text-3xl sm:text-4xl font-bold mb-2">Refund &amp; Cancellation Policy</h1>
       <p className="text-sm text-[var(--muted)] mb-10">
         Last updated: April 19, 2026

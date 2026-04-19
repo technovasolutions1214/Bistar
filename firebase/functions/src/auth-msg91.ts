@@ -67,9 +67,10 @@ export const sendOTP = onCall({ region: "asia-south1" }, async (request) => {
   }
 
   try {
+    const msg91Mobile = phone.replace(/^\+/, "");
     const response = await msg91Request("POST", "/api/v5/otp", {
       template_id: templateId,
-      mobile: phone,
+      mobile: msg91Mobile,
     });
 
     if (response.type === "success") {
@@ -93,9 +94,10 @@ export const verifyOTP = onCall({ region: "asia-south1" }, async (request) => {
   }
 
   try {
+    const msg91Mobile = phone.replace(/^\+/, "");
     const response = await msg91Request(
       "GET",
-      `/api/v5/otp/verify?mobile=${encodeURIComponent(phone)}&otp=${encodeURIComponent(otp)}`,
+      `/api/v5/otp/verify?mobile=${encodeURIComponent(msg91Mobile)}&otp=${encodeURIComponent(otp)}`,
     );
 
     if (response.type !== "success") {

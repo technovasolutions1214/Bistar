@@ -35,8 +35,8 @@ export default function SettingsPage() {
 
   // MSG91 settings
   const [msg91AuthKey, setMsg91AuthKey] = useState("");
-  const [msg91TemplateId, setMsg91TemplateId] = useState("");
-  const [msg91SenderId, setMsg91SenderId] = useState("");
+  const [msg91WidgetId, setMsg91WidgetId] = useState("");
+  const [msg91TokenAuth, setMsg91TokenAuth] = useState("");
 
   // PayU settings
   const [payuKey, setPayuKey] = useState("");
@@ -79,8 +79,9 @@ export default function SettingsPage() {
         if (msg91Snap.exists()) {
           const data = msg91Snap.data();
           setMsg91AuthKey(data.authKey || "");
-          setMsg91TemplateId(data.templateId || "");
-          setMsg91SenderId(data.senderId || "");
+          // Fall back to legacy templateId field which often stored the widgetId
+          setMsg91WidgetId(data.widgetId || data.templateId || "");
+          setMsg91TokenAuth(data.tokenAuth || "");
         }
 
         if (payuSnap.exists()) {
@@ -220,8 +221,8 @@ export default function SettingsPage() {
         }, { merge: true }),
         setDoc(doc(db(), "settings", "msg91"), {
           authKey: msg91AuthKey.trim(),
-          templateId: msg91TemplateId.trim(),
-          senderId: msg91SenderId.trim(),
+          widgetId: msg91WidgetId.trim(),
+          tokenAuth: msg91TokenAuth.trim(),
           updatedAt: serverTimestamp(),
         }, { merge: true }),
         setDoc(doc(db(), "settings", "payu"), {
@@ -293,7 +294,33 @@ export default function SettingsPage() {
           <div>
             <h2 className="text-lg font-semibold">MSG91 (Phone OTP)</h2>
             <p className="text-xs text-[var(--muted)] mt-1">
-              Credentials for sending OTP SMS. Get these from your MSG91 dashboard.
+              Uses the MSG91 Send-OTP widget. Get these from your MSG91 dashboard
+              &rarr; Widgets &rarr; your widget.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Widget ID</label>
+            <Input
+              value={msg91WidgetId}
+              onChange={(e) => setMsg91WidgetId(e.target.value)}
+              placeholder="e.g. 356169706150383534343631"
+            />
+            <p className="text-xs text-[var(--muted)] mt-1">
+              Shown on MSG91 as <code>widgetId</code> in the widget configuration snippet.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Token Auth</label>
+            <Input
+              value={msg91TokenAuth}
+              onChange={(e) => setMsg91TokenAuth(e.target.value)}
+              placeholder="Widget Token Auth"
+              type="password"
+            />
+            <p className="text-xs text-[var(--muted)] mt-1">
+              Shown on MSG91 as <code>tokenAuth</code>. Public-by-design (embedded in the browser).
             </p>
           </div>
 
@@ -302,27 +329,12 @@ export default function SettingsPage() {
             <Input
               value={msg91AuthKey}
               onChange={(e) => setMsg91AuthKey(e.target.value)}
-              placeholder="Your MSG91 Auth Key"
+              placeholder="Your MSG91 account Auth Key"
               type="password"
             />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-2">Template ID</label>
-            <Input
-              value={msg91TemplateId}
-              onChange={(e) => setMsg91TemplateId(e.target.value)}
-              placeholder="MSG91 DLT Template ID"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-2">Sender ID (optional)</label>
-            <Input
-              value={msg91SenderId}
-              onChange={(e) => setMsg91SenderId(e.target.value)}
-              placeholder="e.g. NOVAFX"
-            />
+            <p className="text-xs text-[var(--muted)] mt-1">
+              Used server-side to verify the widget&apos;s access-token. Never exposed to the browser.
+            </p>
           </div>
         </div>
 
