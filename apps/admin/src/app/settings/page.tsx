@@ -10,6 +10,7 @@ import {
   where,
   getDocs,
   serverTimestamp,
+  deleteField,
 } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@novaflix/firebase-config";
@@ -79,8 +80,7 @@ export default function SettingsPage() {
         if (msg91Snap.exists()) {
           const data = msg91Snap.data();
           setMsg91AuthKey(data.authKey || "");
-          // Fall back to legacy templateId field which often stored the widgetId
-          setMsg91WidgetId(data.widgetId || data.templateId || "");
+          setMsg91WidgetId(data.widgetId || "");
           setMsg91TokenAuth(data.tokenAuth || "");
         }
 
@@ -223,6 +223,9 @@ export default function SettingsPage() {
           authKey: msg91AuthKey.trim(),
           widgetId: msg91WidgetId.trim(),
           tokenAuth: msg91TokenAuth.trim(),
+          // Drop legacy fields so nothing falls back to the wrong value
+          templateId: deleteField(),
+          senderId: deleteField(),
           updatedAt: serverTimestamp(),
         }, { merge: true }),
         setDoc(doc(db(), "settings", "payu"), {

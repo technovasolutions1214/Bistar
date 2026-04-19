@@ -12,7 +12,7 @@ async function getMsg91AuthKey(): Promise<string | undefined> {
   } catch (err) {
     console.warn("Failed to read MSG91 settings from Firestore:", err);
   }
-  return process.env.MSG91_AUTH_KEY;
+  return undefined;
 }
 
 export async function POST(request: NextRequest) {

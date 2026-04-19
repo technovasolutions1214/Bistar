@@ -46,6 +46,7 @@ export default function LoginPage() {
   const [redirecting, setRedirecting] = useState(false);
 
   const [widgetCfg, setWidgetCfg] = useState<{ widgetId: string; tokenAuth: string } | null>(null);
+  const [configError, setConfigError] = useState<string | null>(null);
   const [scriptLoaded, setScriptLoaded] = useState(false);
   const [widgetReady, setWidgetReady] = useState(false);
   const initDone = useRef(false);
@@ -59,11 +60,15 @@ export default function LoginPage() {
 
   useEffect(() => {
     fetch("/api/auth/msg91-config")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data?.widgetId && data?.tokenAuth) setWidgetCfg(data);
+      .then(async (r) => ({ ok: r.ok, data: await r.json() }))
+      .then(({ ok, data }) => {
+        if (ok && data?.widgetId && data?.tokenAuth) {
+          setWidgetCfg(data);
+        } else {
+          setConfigError(data?.error || "Phone OTP is not configured");
+        }
       })
-      .catch(() => {});
+      .catch(() => setConfigError("Could not reach OTP service"));
   }, []);
 
   useEffect(() => {
@@ -246,11 +251,17 @@ export default function LoginPage() {
 
       {!otpSent ? (
         <div className="space-y-4">
+          {configError && (
+            <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-sm text-amber-300">
+              Phone sign-in is temporarily unavailable. Please use Google sign-in.
+            </div>
+          )}
           <div className="flex gap-2">
             <select
               value={countryCode}
               onChange={(e) => setCountryCode(e.target.value)}
               className="w-24 bg-[var(--background)] border border-[var(--border)] text-white rounded-lg px-2 py-3 text-sm"
+              disabled={!!configError}
             >
               <option value="+91">+91</option>
               <option value="+1">+1</option>
@@ -263,16 +274,23 @@ export default function LoginPage() {
               placeholder="Phone number"
               value={phone}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPhone(e.target.value)}
+              disabled={!!configError}
               className="flex-1 bg-[var(--background)] border-[var(--border)] text-white placeholder:text-[var(--muted)] px-4 py-3 rounded-lg"
             />
           </div>
           <div id="msg91-captcha" className="flex justify-center min-h-0" />
           <Button
             onClick={handleSendOtp}
-            disabled={loading || !widgetReady}
+            disabled={loading || !widgetReady || !!configError}
             className="w-full bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-medium py-3 rounded-lg disabled:opacity-50 transition-colors"
           >
-            {loading ? "Sending..." : widgetReady ? "Send OTP" : "Loading..."}
+            {configError
+              ? "Phone sign-in unavailable"
+              : loading
+                ? "Sending..."
+                : widgetReady
+                  ? "Send OTP"
+                  : "Preparing..."}
           </Button>
         </div>
       ) : (
