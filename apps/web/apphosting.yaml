@@ -19,3 +19,5 @@ env:
     value: "1019395253345"
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
     value: "1:1019395253345:web:cfddd0803e19bd0e697620"
+  - variable: FIREBASE_SERVICE_ACCOUNT
+    secret: FIREBASE_SERVICE_ACCOUNT
