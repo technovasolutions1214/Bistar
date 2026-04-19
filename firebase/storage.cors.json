@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["https://novaflix.app", "https://admin.novaflix.app", "https://www.novaflix.app"],
+    "method": ["GET", "HEAD"],
+    "responseHeader": ["Content-Type", "Content-Length", "Content-Range", "Accept-Ranges", "ETag", "Last-Modified"],
+    "maxAgeSeconds": 3600
+  }
+]
