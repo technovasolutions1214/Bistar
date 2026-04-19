@@ -92,12 +92,12 @@ export const onVideoUploaded = onObjectFinalized(
     const filePath = event.data.name;
     if (!filePath) return;
 
-    const match = filePath.match(/^videos\/([^/]+)\/original\/(.+)$/);
+    const match = filePath.match(/^videos\/([^/]+)\/([^/]+)\/original\/(.+)$/);
     if (!match) return;
 
     const contentId = match[1];
-    const fileName = match[2];
-    const videoId = path.parse(fileName).name;
+    const videoId = match[2];
+    const fileName = match[3];
 
     const tempDir = path.join(os.tmpdir(), `novaflix-${contentId}-${videoId}`);
     fs.mkdirSync(tempDir, { recursive: true });

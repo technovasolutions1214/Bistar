@@ -7,7 +7,7 @@ import {
   updateDoc,
   collection,
   getDocs,
-  addDoc,
+  setDoc,
   deleteDoc,
   query,
   orderBy,
@@ -173,7 +173,8 @@ export default function EditContentPage() {
     setUploadProgress(0);
 
     try {
-      const videoId = `${Date.now()}`;
+      const videoDocRef = doc(collection(db(), "content", contentId, "videos"));
+      const videoId = videoDocRef.id;
       const storagePath = `videos/${contentId}/${videoId}/original/${videoFile.name}`;
       const storageRef = ref(storage(),storagePath);
       const task = uploadBytesResumable(storageRef, videoFile);
@@ -192,8 +193,8 @@ export default function EditContentPage() {
         },
         async () => {
           const url = await getDownloadURL(task.snapshot.ref);
-          const videoDoc = await addDoc(
-            collection(db(), "content", contentId, "videos"),
+          await setDoc(
+            videoDocRef,
             {
               contentId,
               title: videoTitle.trim(),
@@ -206,13 +207,14 @@ export default function EditContentPage() {
               status: "processing",
               order: videos.length,
               createdAt: serverTimestamp(),
-            }
+            },
+            { merge: true }
           );
 
           setVideos((prev) => [
             ...prev,
             {
-              id: videoDoc.id,
+              id: videoId,
               contentId,
               title: videoTitle.trim(),
               description: videoDescription.trim(),
