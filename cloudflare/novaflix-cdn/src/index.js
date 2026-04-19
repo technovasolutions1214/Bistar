@@ -18,15 +18,29 @@ function chooseTtl(pathname) {
   return DEFAULT_CACHE_TTL;
 }
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+  "Access-Control-Allow-Headers": "Range, If-None-Match, If-Modified-Since",
+  "Access-Control-Expose-Headers": "Content-Length, Content-Range, Accept-Ranges, ETag, Last-Modified",
+  "Access-Control-Max-Age": "86400",
+};
+
 export default {
   async fetch(request, _env, ctx) {
     const url = new URL(request.url);
 
-    // Only serve GET/HEAD — we never accept uploads through the CDN.
+    // CORS preflight — HLS.js and some players send OPTIONS when the XHR adds
+    // a Range or If-* header. Without a 2xx response here the browser cancels
+    // the actual GET and manifest parsing never starts.
+    if (request.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: CORS_HEADERS });
+    }
+
     if (request.method !== "GET" && request.method !== "HEAD") {
       return new Response("Method Not Allowed", {
         status: 405,
-        headers: { "Allow": "GET, HEAD" },
+        headers: { "Allow": "GET, HEAD, OPTIONS" },
       });
     }
 
@@ -39,14 +53,11 @@ export default {
     if (response) return response;
 
     const originUrl = `${ORIGIN}${url.pathname}`;
-    const originRes = await fetch(originUrl, {
-      method: request.method,
-      cf: {
-        // Tell CF's network layer how long to keep the object at the edge.
-        cacheEverything: true,
-        cacheTtl: chooseTtl(url.pathname),
-      },
-    });
+    // Do not use cf: { cacheEverything } — that caches the raw origin response
+    // and then serves subsequent requests WITHOUT invoking the Worker, so our
+    // CORS header additions never make it onto cache hits. Cache the modified
+    // Response manually via caches.default.put() instead.
+    const originRes = await fetch(originUrl, { method: request.method });
 
     // Clone so we can mutate headers and still return.
     const headers = new Headers(originRes.headers);
