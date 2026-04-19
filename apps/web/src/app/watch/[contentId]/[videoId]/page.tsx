@@ -124,8 +124,12 @@ export default function WatchPage() {
     resolvePlaybackUrl();
   }, [firebaseUser, video, params.contentId, params.videoId]);
 
-  // HLS.js setup using signed URL
+  // HLS.js setup using signed URL. The video element is conditionally rendered
+  // behind the Loader, so depend on loading/authLoading here to re-run once the
+  // element is actually in the DOM — otherwise videoRef.current is null the
+  // first time this effect fires with a synchronously-set signedUrl.
   useEffect(() => {
+    if (loading || authLoading) return;
     if (!signedUrl || !videoRef.current) return;
 
     const videoEl = videoRef.current;
@@ -164,7 +168,7 @@ export default function WatchPage() {
         hlsRef.current = null;
       }
     };
-  }, [signedUrl]);
+  }, [signedUrl, loading, authLoading]);
 
   if (loading || authLoading) {
     return (
