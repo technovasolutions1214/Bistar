@@ -46,19 +46,19 @@ export function Footer() {
             </h4>
             <ul className="space-y-2">
               <li>
-                <span className="text-sm text-[var(--muted)]">
-                  Terms of Service - Coming Soon
-                </span>
+                <Link href="/terms" className="text-sm text-[var(--muted)] hover:text-white transition-colors">
+                  Terms of Use
+                </Link>
               </li>
               <li>
-                <span className="text-sm text-[var(--muted)]">
-                  Privacy Policy - Coming Soon
-                </span>
+                <Link href="/privacy" className="text-sm text-[var(--muted)] hover:text-white transition-colors">
+                  Privacy Policy
+                </Link>
               </li>
               <li>
-                <span className="text-sm text-[var(--muted)]">
-                  Contact Us - Coming Soon
-                </span>
+                <Link href="/refund" className="text-sm text-[var(--muted)] hover:text-white transition-colors">
+                  Refund Policy
+                </Link>
               </li>
             </ul>
           </div>
