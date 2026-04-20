@@ -78,21 +78,18 @@ export default function WatchPage() {
     setSignedUrl(null);
   }, [params.videoId]);
 
-  // Resolve the playback URL. When the transcoder has produced an HLS master,
-  // use the CDN-hosted videoUrl directly (cache-friendly, supports ABR). Fall
-  // back to the gated /api/video/stream signer for the original MP4 while
-  // status is "processing" or for legacy content without a transcoded ladder.
+  // Resolve the playback URL. When the video is ready (transcoded HLS for
+  // uploads, or any external URL the admin pasted), use videoUrl directly.
+  // Fall back to the gated /api/video/stream signer for the original MP4
+  // while status is "processing".
   useEffect(() => {
     async function resolvePlaybackUrl() {
       if (!firebaseUser || !params.contentId || !params.videoId || !video) return;
 
-      const hlsMaster =
-        video.status === "ready" && video.videoUrl?.endsWith(".m3u8")
-          ? video.videoUrl
-          : null;
+      const directUrl = video.status === "ready" && video.videoUrl ? video.videoUrl : null;
 
-      if (hlsMaster) {
-        setSignedUrl(hlsMaster);
+      if (directUrl) {
+        setSignedUrl(directUrl);
         return;
       }
 

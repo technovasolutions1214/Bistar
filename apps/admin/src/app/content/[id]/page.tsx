@@ -48,11 +48,13 @@ export default function EditContentPage() {
   // Videos
   const [videos, setVideos] = useState<Video[]>([]);
   const [showVideoUpload, setShowVideoUpload] = useState(false);
+  const [videoSourceMode, setVideoSourceMode] = useState<"upload" | "url">("upload");
   const [videoTitle, setVideoTitle] = useState("");
   const [videoDescription, setVideoDescription] = useState("");
   const [videoSeason, setVideoSeason] = useState("");
   const [videoEpisode, setVideoEpisode] = useState("");
   const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoExternalUrl, setVideoExternalUrl] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [editingVideoId, setEditingVideoId] = useState<string | null>(null);
@@ -241,6 +243,7 @@ export default function EditContentPage() {
           setUploadProgress(0);
           setUploading(false);
           setShowVideoUpload(false);
+          resetVideoForm();
           toast.success("Video uploaded successfully");
         }
       );
@@ -249,6 +252,72 @@ export default function EditContentPage() {
       toast.error("Video upload failed");
       setUploading(false);
     }
+  };
+
+  const handleVideoUrlAdd = async () => {
+    const trimmedUrl = videoExternalUrl.trim();
+    const trimmedTitle = videoTitle.trim();
+    if (!trimmedUrl || !trimmedTitle) return;
+    if (!/^https:\/\//i.test(trimmedUrl)) {
+      toast.error("Video URL must start with https://");
+      return;
+    }
+    setUploading(true);
+    try {
+      const videoDocRef = doc(collection(db(), "content", contentId, "videos"));
+      const videoId = videoDocRef.id;
+      // No Storage upload, no transcoding pipeline. The pasted URL is what we
+      // play directly — works for HLS .m3u8 (Cloudflare Stream, Mux, Bunny)
+      // or any direct .mp4. status: "ready" so the watch page picks videoUrl
+      // immediately instead of falling back to the signed-URL path.
+      await setDoc(videoDocRef, {
+        contentId,
+        title: trimmedTitle,
+        description: videoDescription.trim(),
+        season: videoSeason ? parseInt(videoSeason) : null,
+        episode: videoEpisode ? parseInt(videoEpisode) : null,
+        videoUrl: trimmedUrl,
+        source: "external",
+        duration: 0,
+        status: "ready",
+        order: videos.length,
+        createdAt: serverTimestamp(),
+      });
+      setVideos((prev) => [
+        ...prev,
+        {
+          id: videoId,
+          contentId,
+          title: trimmedTitle,
+          description: videoDescription.trim(),
+          season: videoSeason ? parseInt(videoSeason) : undefined,
+          episode: videoEpisode ? parseInt(videoEpisode) : undefined,
+          videoUrl: trimmedUrl,
+          duration: 0,
+          status: "ready",
+          order: videos.length,
+          createdAt: serverTimestamp(),
+        } as unknown as Video,
+      ]);
+      setUploading(false);
+      setShowVideoUpload(false);
+      resetVideoForm();
+      toast.success("Video added");
+    } catch (err) {
+      console.error("Failed to add video by URL:", err);
+      toast.error("Failed to add video");
+      setUploading(false);
+    }
+  };
+
+  const resetVideoForm = () => {
+    setVideoTitle("");
+    setVideoDescription("");
+    setVideoSeason("");
+    setVideoEpisode("");
+    setVideoFile(null);
+    setVideoExternalUrl("");
+    setVideoSourceMode("upload");
   };
 
   const moveVideo = async (index: number, direction: "up" | "down") => {
@@ -600,8 +669,45 @@ export default function EditContentPage() {
       </div>
 
       {/* Video Upload Modal */}
-      <Modal isOpen={showVideoUpload} onClose={() => setShowVideoUpload(false)} title="Upload Video" size="lg">
+      <Modal
+        isOpen={showVideoUpload}
+        onClose={() => {
+          if (uploading) return;
+          setShowVideoUpload(false);
+          resetVideoForm();
+        }}
+        title="Add Video"
+        size="lg"
+      >
         <div className="space-y-4">
+          {/* Source mode tabs */}
+          <div className="inline-flex p-1 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+            <button
+              type="button"
+              onClick={() => !uploading && setVideoSourceMode("upload")}
+              disabled={uploading}
+              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                videoSourceMode === "upload"
+                  ? "bg-[var(--primary)] text-white"
+                  : "text-[var(--muted)] hover:text-[var(--foreground)]"
+              }`}
+            >
+              Upload File
+            </button>
+            <button
+              type="button"
+              onClick={() => !uploading && setVideoSourceMode("url")}
+              disabled={uploading}
+              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                videoSourceMode === "url"
+                  ? "bg-[var(--primary)] text-white"
+                  : "text-[var(--muted)] hover:text-[var(--foreground)]"
+              }`}
+            >
+              Use URL
+            </button>
+          </div>
+
           <div>
             <label className="block text-sm font-medium mb-2">Title *</label>
             <Input value={videoTitle} onChange={(e) => setVideoTitle(e.target.value)} placeholder="Video title" />
@@ -628,25 +734,41 @@ export default function EditContentPage() {
               </div>
             </div>
           )}
-          <div>
-            <label className="block text-sm font-medium mb-2">Video File *</label>
-            <label className="flex flex-col items-center justify-center px-4 py-8 rounded-lg border-2 border-dashed border-[var(--border)] hover:border-[var(--primary)] cursor-pointer transition-colors">
-              {videoFile ? (
-                <div className="text-center">
-                  <p className="text-sm font-medium">{videoFile.name}</p>
-                  <p className="text-xs text-[var(--muted)] mt-1">{(videoFile.size / (1024 * 1024)).toFixed(1)} MB</p>
-                </div>
-              ) : (
-                <>
-                  <svg className="w-10 h-10 text-[var(--muted)] mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                  </svg>
-                  <span className="text-sm text-[var(--muted)]">Click to select a video file</span>
-                </>
-              )}
-              <input type="file" accept="video/*" className="hidden" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} />
-            </label>
-          </div>
+          {videoSourceMode === "upload" ? (
+            <div>
+              <label className="block text-sm font-medium mb-2">Video File *</label>
+              <label className="flex flex-col items-center justify-center px-4 py-8 rounded-lg border-2 border-dashed border-[var(--border)] hover:border-[var(--primary)] cursor-pointer transition-colors">
+                {videoFile ? (
+                  <div className="text-center">
+                    <p className="text-sm font-medium">{videoFile.name}</p>
+                    <p className="text-xs text-[var(--muted)] mt-1">{(videoFile.size / (1024 * 1024)).toFixed(1)} MB</p>
+                  </div>
+                ) : (
+                  <>
+                    <svg className="w-10 h-10 text-[var(--muted)] mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                    </svg>
+                    <span className="text-sm text-[var(--muted)]">Click to select a video file</span>
+                  </>
+                )}
+                <input type="file" accept="video/*" className="hidden" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} />
+              </label>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium mb-2">Video URL *</label>
+              <Input
+                type="url"
+                value={videoExternalUrl}
+                onChange={(e) => setVideoExternalUrl(e.target.value)}
+                placeholder="https://customer-xxx.cloudflarestream.com/.../manifest/video.m3u8"
+              />
+              <p className="text-xs text-[var(--muted)] mt-1">
+                Paste an HLS master playlist (<code>.m3u8</code>) or a direct video URL (<code>.mp4</code>).
+                The provider must allow CORS and Range requests for HLS playback to work.
+              </p>
+            </div>
+          )}
 
           {/* Progress bar */}
           {uploading && (
@@ -671,8 +793,33 @@ export default function EditContentPage() {
           )}
 
           <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setShowVideoUpload(false)} disabled={uploading}>Cancel</Button>
-            <Button loading={uploading} onClick={handleVideoUpload} disabled={!videoFile || !videoTitle.trim()}>Upload</Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setShowVideoUpload(false);
+                resetVideoForm();
+              }}
+              disabled={uploading}
+            >
+              Cancel
+            </Button>
+            {videoSourceMode === "upload" ? (
+              <Button
+                loading={uploading}
+                onClick={handleVideoUpload}
+                disabled={!videoFile || !videoTitle.trim()}
+              >
+                Upload
+              </Button>
+            ) : (
+              <Button
+                loading={uploading}
+                onClick={handleVideoUrlAdd}
+                disabled={!videoExternalUrl.trim() || !videoTitle.trim()}
+              >
+                Add Video
+              </Button>
+            )}
           </div>
         </div>
       </Modal>
