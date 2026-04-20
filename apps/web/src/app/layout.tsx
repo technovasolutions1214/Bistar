@@ -3,6 +3,7 @@ import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
+import { PixelLoader } from "@/components/pixel-loader";
 
 export const metadata: Metadata = {
   title: "NovaFlix - Stream Movies & Series",
@@ -14,6 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="min-h-screen">
         <AuthProvider>
+          <PixelLoader />
           <Navbar />
           <main>{children}</main>
           <Footer />

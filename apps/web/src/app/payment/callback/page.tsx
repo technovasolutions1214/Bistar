@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { Loader } from "@novaflix/ui";
+import { track } from "@/lib/pixel";
 
 type PaymentStatus = "loading" | "success" | "failure";
 
@@ -30,6 +31,9 @@ function PaymentCallbackContent() {
       const paymentStatus = searchParams.get("status");
       const txnId = searchParams.get("txnId");
       const planId = searchParams.get("planId");
+      const amountStr = searchParams.get("amount");
+      const currency = searchParams.get("currency") || "INR";
+      const amount = amountStr ? Number(amountStr) : NaN;
 
       if (paymentStatus !== "success" || !txnId) {
         setStatus("failure");
@@ -67,6 +71,14 @@ function PaymentCallbackContent() {
         if (res.ok) {
           setStatus("success");
           setMessage("Your subscription is now active!");
+          // Subscribe is the canonical Meta Pixel event for paid subscriptions.
+          // Amount + currency come from the PayU callback query string.
+          track("Subscribe", {
+            content_ids: planId ? [planId] : undefined,
+            value: Number.isFinite(amount) ? amount : undefined,
+            currency,
+            transaction_id: txnId,
+          });
         } else {
           setStatus("failure");
           setMessage(data.error || "Failed to activate subscription.");

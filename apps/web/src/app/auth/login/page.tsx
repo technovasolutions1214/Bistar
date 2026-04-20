@@ -12,6 +12,7 @@ import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@novaflix/firebase-config";
 import { Button, Input } from "@novaflix/ui";
 import { useAuth } from "@/lib/auth-context";
+import { track } from "@/lib/pixel";
 
 interface MSG91Config {
   widgetId: string;
@@ -93,7 +94,11 @@ export default function LoginPage() {
 
   if (redirecting || firebaseUser) return null;
 
-  async function createUserDoc(uid: string, data: Record<string, unknown>) {
+  async function createUserDoc(
+    uid: string,
+    data: Record<string, unknown>,
+    method: "google" | "phone",
+  ): Promise<{ isNew: boolean }> {
     const userRef = doc(db(), "users", uid);
     const existing = await getDoc(userRef);
     if (!existing.exists()) {
@@ -105,9 +110,12 @@ export default function LoginPage() {
         updatedAt: serverTimestamp(),
         ...data,
       });
-    } else {
-      await setDoc(userRef, { ...data, updatedAt: serverTimestamp() }, { merge: true });
+      // First-time user — fire CompleteRegistration. Re-signins are no-ops.
+      track("CompleteRegistration", { registration_method: method, status: true });
+      return { isNew: true };
     }
+    await setDoc(userRef, { ...data, updatedAt: serverTimestamp() }, { merge: true });
+    return { isNew: false };
   }
 
   async function handleGoogleSignIn() {
@@ -117,11 +125,15 @@ export default function LoginPage() {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth(), provider);
       const user = result.user;
-      await createUserDoc(user.uid, {
-        displayName: user.displayName || "",
-        email: user.email || "",
-        photoURL: user.photoURL || "",
-      });
+      await createUserDoc(
+        user.uid,
+        {
+          displayName: user.displayName || "",
+          email: user.email || "",
+          photoURL: user.photoURL || "",
+        },
+        "google",
+      );
       router.push("/");
     } catch (err) {
       console.error("Google sign-in error:", err);
@@ -190,10 +202,14 @@ export default function LoginPage() {
           if (!res.ok) throw new Error(body.error || "Failed to verify OTP");
 
           const result = await signInWithCustomToken(auth(), body.token);
-          await createUserDoc(result.user.uid, {
-            phone: fullPhone,
-            displayName: result.user.displayName || fullPhone,
-          });
+          await createUserDoc(
+            result.user.uid,
+            {
+              phone: fullPhone,
+              displayName: result.user.displayName || fullPhone,
+            },
+            "phone",
+          );
           router.push("/");
         } catch (err) {
           setError(err instanceof Error ? err.message : "Failed to verify OTP");

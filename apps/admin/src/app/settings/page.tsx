@@ -51,6 +51,7 @@ export default function SettingsPage() {
   const [existingLogo, setExistingLogo] = useState("");
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState("");
+  const [metaPixelId, setMetaPixelId] = useState("");
 
   // Admin management
   const [admins, setAdmins] = useState<AdminUser[]>([]);
@@ -75,6 +76,7 @@ export default function SettingsPage() {
           setSiteName(data.siteName || "");
           setExistingLogo(data.logo || "");
           setRequireSubscriptionToBrowse(data.requireSubscriptionToBrowse ?? false);
+          setMetaPixelId(typeof data.metaPixelId === "string" ? data.metaPixelId : "");
         }
 
         if (msg91Snap.exists()) {
@@ -217,6 +219,10 @@ export default function SettingsPage() {
           siteName: siteName.trim(),
           logo: logoUrl,
           requireSubscriptionToBrowse,
+          // Empty string = pixel disabled. Save the trimmed value verbatim
+          // (don't deleteField — admins want to be able to leave it blank
+          // intentionally, and reading "" is just as effective as missing).
+          metaPixelId: metaPixelId.trim(),
           updatedAt: serverTimestamp(),
         }, { merge: true }),
         setDoc(doc(db(), "settings", "msg91"), {
@@ -448,6 +454,20 @@ export default function SettingsPage() {
                 />
               </label>
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Meta Pixel ID</label>
+            <Input
+              value={metaPixelId}
+              onChange={(e) => setMetaPixelId(e.target.value)}
+              placeholder="e.g. 1234567890123456"
+              inputMode="numeric"
+            />
+            <p className="text-xs text-[var(--muted)] mt-1">
+              Numeric Pixel ID from Meta Events Manager. Leave blank to disable Meta Pixel
+              entirely on the consumer site — no script will load and no events will fire.
+            </p>
           </div>
         </div>
 

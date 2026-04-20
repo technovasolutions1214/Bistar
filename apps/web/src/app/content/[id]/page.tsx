@@ -15,6 +15,7 @@ import {
 import { db } from "@novaflix/firebase-config";
 import { Loader, Button } from "@novaflix/ui";
 import { useAuth } from "@/lib/auth-context";
+import { track } from "@/lib/pixel";
 import type { Content, Video } from "@novaflix/shared";
 
 interface GeneralSettings {
@@ -62,6 +63,17 @@ export default function ContentDetailPage() {
 
     fetchContent();
   }, [params.id]);
+
+  // Fire a Meta Pixel ViewContent event once we know what's loaded.
+  useEffect(() => {
+    if (!content) return;
+    track("ViewContent", {
+      content_ids: [content.id],
+      content_type: "video",
+      content_name: content.title,
+      content_category: content.type,
+    });
+  }, [content]);
 
   if (loading || authLoading) {
     return (

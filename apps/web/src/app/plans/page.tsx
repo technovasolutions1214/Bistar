@@ -12,6 +12,7 @@ import {
 import { db } from "@novaflix/firebase-config";
 import { Loader } from "@novaflix/ui";
 import { useAuth } from "@/lib/auth-context";
+import { track } from "@/lib/pixel";
 
 import type { Plan } from "@novaflix/shared";
 
@@ -51,6 +52,16 @@ export default function PlansPage() {
 
     setError(null);
     setProcessingPlanId(plan.id);
+
+    // Fire InitiateCheckout BEFORE the redirect — once we navigate away the
+    // page is gone and any deferred fbq call in the network buffer is lost.
+    track("InitiateCheckout", {
+      content_ids: [plan.id],
+      content_name: plan.name,
+      value: plan.price,
+      currency: "INR",
+      num_items: 1,
+    });
 
     try {
       const token = await firebaseUser.getIdToken();

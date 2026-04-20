@@ -16,6 +16,7 @@ import { db } from "@novaflix/firebase-config";
 import { Input, Skeleton } from "@novaflix/ui";
 import { GENRES, type Content } from "@novaflix/shared";
 import { SubscriptionGate } from "@/components/subscription-gate";
+import { track } from "@/lib/pixel";
 
 type ContentType = "all" | "movie" | "series";
 
@@ -52,6 +53,14 @@ export default function BrowsePage() {
     const timer = setTimeout(() => setDebouncedSearch(searchTerm), 400);
     return () => clearTimeout(timer);
   }, [searchTerm]);
+
+  // Fire Meta Pixel Search once the debounced query settles. Skip empty
+  // strings so we don't ping fbq while the user is just clearing the box.
+  useEffect(() => {
+    const trimmed = debouncedSearch.trim();
+    if (!trimmed) return;
+    track("Search", { search_string: trimmed });
+  }, [debouncedSearch]);
 
   const fetchContent = useCallback(async () => {
     setLoading(true);
