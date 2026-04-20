@@ -55,6 +55,9 @@ export default function EditContentPage() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
+  const [editingVideoId, setEditingVideoId] = useState<string | null>(null);
+  const [editingTitleDraft, setEditingTitleDraft] = useState("");
+  const [savingVideoTitle, setSavingVideoTitle] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -280,6 +283,46 @@ export default function EditContentPage() {
     }
   };
 
+  const startEditingVideoTitle = (video: Video) => {
+    setEditingVideoId(video.id);
+    setEditingTitleDraft(video.title);
+  };
+
+  const cancelEditingVideoTitle = () => {
+    setEditingVideoId(null);
+    setEditingTitleDraft("");
+  };
+
+  const saveVideoTitle = async () => {
+    if (!editingVideoId) return;
+    const trimmed = editingTitleDraft.trim();
+    if (!trimmed) {
+      toast.error("Title cannot be empty");
+      return;
+    }
+    const original = videos.find((v) => v.id === editingVideoId);
+    if (original && original.title === trimmed) {
+      cancelEditingVideoTitle();
+      return;
+    }
+    setSavingVideoTitle(true);
+    try {
+      await updateDoc(doc(db(), "content", contentId, "videos", editingVideoId), {
+        title: trimmed,
+      });
+      setVideos((prev) =>
+        prev.map((v) => (v.id === editingVideoId ? { ...v, title: trimmed } : v))
+      );
+      toast.success("Video title updated");
+      cancelEditingVideoTitle();
+    } catch (err) {
+      console.error("Failed to update video title:", err);
+      toast.error("Failed to update title");
+    } finally {
+      setSavingVideoTitle(false);
+    }
+  };
+
   const statusBadge = (s: Video["status"]) => {
     const styles = {
       processing: "bg-[var(--warning)]/10 text-[var(--warning)]",
@@ -474,12 +517,52 @@ export default function EditContentPage() {
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{video.title}</p>
-                    <p className="text-xs text-[var(--muted)]">
-                      {video.season != null && `S${video.season}`}
-                      {video.episode != null && `E${video.episode}`}
-                      {video.duration > 0 && ` - ${Math.floor(video.duration / 60)}m`}
-                    </p>
+                    {editingVideoId === video.id ? (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          autoFocus
+                          value={editingTitleDraft}
+                          onChange={(e) => setEditingTitleDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") saveVideoTitle();
+                            else if (e.key === "Escape") cancelEditingVideoTitle();
+                          }}
+                          className="h-8 text-sm"
+                        />
+                        <Button size="sm" onClick={saveVideoTitle} disabled={savingVideoTitle}>
+                          {savingVideoTitle ? "Saving…" : "Save"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={cancelEditingVideoTitle}
+                          disabled={savingVideoTitle}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-medium truncate">{video.title}</p>
+                          <button
+                            onClick={() => startEditingVideoTitle(video)}
+                            className="p-1 rounded hover:bg-[var(--card)] text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+                            aria-label="Edit title"
+                            title="Edit title"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zM19.5 19.5h-15" />
+                            </svg>
+                          </button>
+                        </div>
+                        <p className="text-xs text-[var(--muted)]">
+                          {video.season != null && `S${video.season}`}
+                          {video.episode != null && `E${video.episode}`}
+                          {video.duration > 0 && ` - ${Math.floor(video.duration / 60)}m`}
+                        </p>
+                      </>
+                    )}
                   </div>
 
                   {/* Status */}
