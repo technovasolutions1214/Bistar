@@ -677,7 +677,7 @@ export default function EditContentPage() {
           resetVideoForm();
         }}
         title="Add Video"
-        size="lg"
+        size="md"
       >
         <div className="space-y-4">
           {/* Source mode tabs */}
