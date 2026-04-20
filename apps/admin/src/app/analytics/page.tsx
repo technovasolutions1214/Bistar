@@ -52,25 +52,29 @@ export default function AnalyticsPage() {
     fetchAnalytics();
   }, [dateRange]);
 
+  // newUsers is a per-day delta (sum across the range). The other three are
+  // daily snapshots — show the latest value rather than summing.
   const totals = useMemo(() => {
-    return entries.reduce(
-      (acc, e) => ({
-        views: acc.views + e.views,
-        signups: acc.signups + e.signups,
-        subscriptions: acc.subscriptions + e.subscriptions,
-        revenue: acc.revenue + e.revenue,
-      }),
-      { views: 0, signups: 0, subscriptions: 0, revenue: 0 }
-    );
+    const newUsers = entries.reduce((acc, e) => acc + (e.newUsers ?? 0), 0);
+    const latest = entries[entries.length - 1];
+    return {
+      newUsers,
+      totalUsers: latest?.totalUsers ?? 0,
+      activeSubscriptions: latest?.activeSubscriptions ?? 0,
+      totalPublishedContent: latest?.totalPublishedContent ?? 0,
+    };
   }, [entries]);
 
-  const maxRevenue = useMemo(() => Math.max(...entries.map((e) => e.revenue), 1), [entries]);
+  const maxNewUsers = useMemo(
+    () => Math.max(...entries.map((e) => e.newUsers ?? 0), 1),
+    [entries]
+  );
 
   const statCards = [
-    { label: "Total Views", value: totals.views.toLocaleString(), color: "var(--primary)" },
-    { label: "New Signups", value: totals.signups.toLocaleString(), color: "var(--success)" },
-    { label: "Subscriptions", value: totals.subscriptions.toLocaleString(), color: "var(--warning)" },
-    { label: "Revenue", value: `$${totals.revenue.toLocaleString()}`, color: "var(--success)" },
+    { label: "Total Users", value: totals.totalUsers.toLocaleString(), color: "var(--primary)" },
+    { label: "New Users (range)", value: totals.newUsers.toLocaleString(), color: "var(--success)" },
+    { label: "Active Subscriptions", value: totals.activeSubscriptions.toLocaleString(), color: "var(--warning)" },
+    { label: "Published Content", value: totals.totalPublishedContent.toLocaleString(), color: "var(--success)" },
   ];
 
   return (
@@ -150,7 +154,7 @@ export default function AnalyticsPage() {
 
             {/* Chart area (simple bar chart) */}
             <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-6">
-              <h2 className="text-lg font-semibold mb-4">Revenue Trend</h2>
+              <h2 className="text-lg font-semibold mb-4">New Users per Day</h2>
               {entries.length === 0 ? (
                 <p className="text-[var(--muted)] text-sm text-center py-8">No data for the selected period.</p>
               ) : (
@@ -161,11 +165,11 @@ export default function AnalyticsPage() {
                       <div
                         key={i}
                         className="flex-1 flex flex-col items-center justify-end h-full"
-                        title={`${entry.date}: $${entry.revenue}`}
+                        title={`${entry.date}: ${entry.newUsers ?? 0} new users`}
                       >
                         <div
                           className="w-full rounded-t bg-[var(--primary)] hover:bg-[var(--primary-hover)] transition-colors min-h-[2px]"
-                          style={{ height: `${(entry.revenue / maxRevenue) * 100}%` }}
+                          style={{ height: `${((entry.newUsers ?? 0) / maxNewUsers) * 100}%` }}
                         />
                       </div>
                     ))}
@@ -190,10 +194,10 @@ export default function AnalyticsPage() {
                   <thead>
                     <tr className="border-b border-[var(--border)]">
                       <th className="text-left px-4 py-3 text-[var(--muted)] font-medium">Date</th>
-                      <th className="text-right px-4 py-3 text-[var(--muted)] font-medium">Views</th>
-                      <th className="text-right px-4 py-3 text-[var(--muted)] font-medium">Signups</th>
-                      <th className="text-right px-4 py-3 text-[var(--muted)] font-medium">Subscriptions</th>
-                      <th className="text-right px-4 py-3 text-[var(--muted)] font-medium">Revenue</th>
+                      <th className="text-right px-4 py-3 text-[var(--muted)] font-medium">New Users</th>
+                      <th className="text-right px-4 py-3 text-[var(--muted)] font-medium">Total Users</th>
+                      <th className="text-right px-4 py-3 text-[var(--muted)] font-medium">Active Subs</th>
+                      <th className="text-right px-4 py-3 text-[var(--muted)] font-medium">Published</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -205,10 +209,10 @@ export default function AnalyticsPage() {
                       [...entries].reverse().map((entry) => (
                         <tr key={entry.date} className="border-b border-[var(--border)] hover:bg-[var(--card-hover)] transition-colors">
                           <td className="px-4 py-3 font-medium">{entry.date}</td>
-                          <td className="px-4 py-3 text-right text-[var(--muted)]">{entry.views.toLocaleString()}</td>
-                          <td className="px-4 py-3 text-right text-[var(--muted)]">{entry.signups.toLocaleString()}</td>
-                          <td className="px-4 py-3 text-right text-[var(--muted)]">{entry.subscriptions.toLocaleString()}</td>
-                          <td className="px-4 py-3 text-right font-medium text-[var(--success)]">${entry.revenue.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-right text-[var(--muted)]">{(entry.newUsers ?? 0).toLocaleString()}</td>
+                          <td className="px-4 py-3 text-right text-[var(--muted)]">{(entry.totalUsers ?? 0).toLocaleString()}</td>
+                          <td className="px-4 py-3 text-right text-[var(--muted)]">{(entry.activeSubscriptions ?? 0).toLocaleString()}</td>
+                          <td className="px-4 py-3 text-right font-medium text-[var(--success)]">{(entry.totalPublishedContent ?? 0).toLocaleString()}</td>
                         </tr>
                       ))
                     )}

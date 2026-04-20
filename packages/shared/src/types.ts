@@ -94,10 +94,10 @@ export interface SiteSettings {
 
 export interface AnalyticsEntry {
   date: string;
-  views: number;
-  signups: number;
-  subscriptions: number;
-  revenue: number;
+  newUsers: number;
+  totalUsers: number;
+  activeSubscriptions: number;
+  totalPublishedContent: number;
 }
 
 export const GENRES = [
