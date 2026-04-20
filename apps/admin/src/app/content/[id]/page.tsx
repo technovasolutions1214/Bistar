@@ -61,6 +61,7 @@ export default function EditContentPage() {
   const [uploading, setUploading] = useState(false);
   const [editingVideoId, setEditingVideoId] = useState<string | null>(null);
   const [editingTitleDraft, setEditingTitleDraft] = useState("");
+  const [editingDescriptionDraft, setEditingDescriptionDraft] = useState("");
   const [savingVideoTitle, setSavingVideoTitle] = useState(false);
 
   const fetchData = useCallback(async () => {
@@ -375,38 +376,47 @@ export default function EditContentPage() {
   const startEditingVideoTitle = (video: Video) => {
     setEditingVideoId(video.id);
     setEditingTitleDraft(video.title);
+    setEditingDescriptionDraft(video.description ?? "");
   };
 
   const cancelEditingVideoTitle = () => {
     setEditingVideoId(null);
     setEditingTitleDraft("");
+    setEditingDescriptionDraft("");
   };
 
   const saveVideoTitle = async () => {
     if (!editingVideoId) return;
-    const trimmed = editingTitleDraft.trim();
-    if (!trimmed) {
+    const trimmedTitle = editingTitleDraft.trim();
+    const trimmedDescription = editingDescriptionDraft.trim();
+    if (!trimmedTitle) {
       toast.error("Title cannot be empty");
       return;
     }
     const original = videos.find((v) => v.id === editingVideoId);
-    if (original && original.title === trimmed) {
+    const originalDesc = original?.description ?? "";
+    if (original && original.title === trimmedTitle && originalDesc === trimmedDescription) {
       cancelEditingVideoTitle();
       return;
     }
     setSavingVideoTitle(true);
     try {
       await updateDoc(doc(db(), "content", contentId, "videos", editingVideoId), {
-        title: trimmed,
+        title: trimmedTitle,
+        description: trimmedDescription,
       });
       setVideos((prev) =>
-        prev.map((v) => (v.id === editingVideoId ? { ...v, title: trimmed } : v))
+        prev.map((v) =>
+          v.id === editingVideoId
+            ? { ...v, title: trimmedTitle, description: trimmedDescription }
+            : v,
+        ),
       );
-      toast.success("Video title updated");
+      toast.success("Video updated");
       cancelEditingVideoTitle();
     } catch (err) {
-      console.error("Failed to update video title:", err);
-      toast.error("Failed to update title");
+      console.error("Failed to update video:", err);
+      toast.error("Failed to update video");
     } finally {
       setSavingVideoTitle(false);
     }
@@ -619,28 +629,45 @@ export default function EditContentPage() {
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     {editingVideoId === video.id ? (
-                      <div className="flex items-center gap-2">
+                      <div className="space-y-2">
                         <Input
                           autoFocus
                           value={editingTitleDraft}
                           onChange={(e) => setEditingTitleDraft(e.target.value)}
                           onKeyDown={(e) => {
-                            if (e.key === "Enter") saveVideoTitle();
-                            else if (e.key === "Escape") cancelEditingVideoTitle();
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault();
+                              saveVideoTitle();
+                            } else if (e.key === "Escape") {
+                              cancelEditingVideoTitle();
+                            }
                           }}
                           className="h-8 text-sm"
+                          placeholder="Title"
                         />
-                        <Button size="sm" onClick={saveVideoTitle} disabled={savingVideoTitle}>
-                          {savingVideoTitle ? "Saving…" : "Save"}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={cancelEditingVideoTitle}
-                          disabled={savingVideoTitle}
-                        >
-                          Cancel
-                        </Button>
+                        <textarea
+                          value={editingDescriptionDraft}
+                          onChange={(e) => setEditingDescriptionDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") cancelEditingVideoTitle();
+                          }}
+                          rows={2}
+                          placeholder="Optional description"
+                          className="w-full px-3 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-sm placeholder:text-[var(--muted)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] resize-none"
+                        />
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" onClick={saveVideoTitle} disabled={savingVideoTitle}>
+                            {savingVideoTitle ? "Saving…" : "Save"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={cancelEditingVideoTitle}
+                            disabled={savingVideoTitle}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
                       </div>
                     ) : (
                       <>
@@ -649,19 +676,26 @@ export default function EditContentPage() {
                           <button
                             onClick={() => startEditingVideoTitle(video)}
                             className="p-1 rounded hover:bg-[var(--card)] text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
-                            aria-label="Edit title"
-                            title="Edit title"
+                            aria-label="Edit title and description"
+                            title="Edit title and description"
                           >
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zM19.5 19.5h-15" />
                             </svg>
                           </button>
                         </div>
-                        <p className="text-xs text-[var(--muted)]">
-                          {video.season != null && `S${video.season}`}
-                          {video.episode != null && `E${video.episode}`}
-                          {video.duration > 0 && ` - ${Math.floor(video.duration / 60)}m`}
-                        </p>
+                        {video.description && (
+                          <p className="text-xs text-[var(--muted)] line-clamp-2 mt-0.5">
+                            {video.description}
+                          </p>
+                        )}
+                        {(video.season != null || video.episode != null || video.duration > 0) && (
+                          <p className="text-xs text-[var(--muted)] mt-0.5">
+                            {video.season != null && `S${video.season}`}
+                            {video.episode != null && `E${video.episode}`}
+                            {video.duration > 0 && ` - ${Math.floor(video.duration / 60)}m`}
+                          </p>
+                        )}
                       </>
                     )}
                   </div>

@@ -211,9 +211,11 @@ export default function ContentDetailPage() {
                         {video.description}
                       </p>
                     )}
-                    <span className="text-xs text-[var(--muted)]">
-                      {formatDuration(video.duration)}
-                    </span>
+                    {video.duration > 0 && (
+                      <span className="text-xs text-[var(--muted)]">
+                        {formatDuration(video.duration)}
+                      </span>
+                    )}
                   </div>
 
                   {/* Play Button */}

@@ -13,6 +13,7 @@ import { db } from "@novaflix/firebase-config";
 import { Loader } from "@novaflix/ui";
 import { useAuth } from "@/lib/auth-context";
 import { track } from "@/lib/pixel";
+import { PaymentModal } from "@/components/payment-modal";
 
 import type { Plan } from "@novaflix/shared";
 
@@ -22,7 +23,7 @@ export default function PlansPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [processingPlanId, setProcessingPlanId] = useState<string | null>(null);
+  const [checkoutPlan, setCheckoutPlan] = useState<Plan | null>(null);
 
   useEffect(() => {
     async function fetchPlans() {
@@ -44,17 +45,14 @@ export default function PlansPage() {
     fetchPlans();
   }, []);
 
-  async function handleSubscribe(plan: Plan) {
+  function handleSubscribe(plan: Plan) {
     if (!firebaseUser || !userData) {
       router.push("/auth/login");
       return;
     }
 
     setError(null);
-    setProcessingPlanId(plan.id);
 
-    // Fire InitiateCheckout BEFORE the redirect — once we navigate away the
-    // page is gone and any deferred fbq call in the network buffer is lost.
     track("InitiateCheckout", {
       content_ids: [plan.id],
       content_name: plan.name,
@@ -63,32 +61,10 @@ export default function PlansPage() {
       num_items: 1,
     });
 
-    try {
-      const token = await firebaseUser.getIdToken();
-      const res = await fetch("/api/payment/payu/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ planId: plan.id }),
-      });
-
-      const body = await res.json();
-
-      if (!res.ok || !body.paymentUrl) {
-        setError(body.error || "Failed to start payment. Please try again.");
-        setProcessingPlanId(null);
-        return;
-      }
-
-      // Redirect to PayU (via flix.cinestry.com)
-      window.location.href = body.paymentUrl;
-    } catch (err) {
-      console.error("Failed to initiate payment:", err);
-      setError("Something went wrong. Please try again.");
-      setProcessingPlanId(null);
-    }
+    // PaymentModal handles create + popup + polling. We stay on /plans so the
+    // polling tab doesn't get unloaded mid-payment the way a top-level redirect
+    // would unload it.
+    setCheckoutPlan(plan);
   }
 
   // Compute remaining days for the current subscription (if any)
@@ -235,32 +211,34 @@ export default function PlansPage() {
 
                   <button
                     onClick={() => handleSubscribe(plan)}
-                    disabled={processingPlanId === plan.id}
+                    disabled={checkoutPlan?.id === plan.id}
                     className={`w-full py-3 rounded-lg font-medium text-sm transition-colors flex items-center justify-center gap-2 ${
-                      processingPlanId === plan.id
+                      checkoutPlan?.id === plan.id
                         ? "bg-[var(--card-hover)] text-[var(--muted)] cursor-wait"
                         : isPopular
                           ? "bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)]"
                           : "bg-white/10 text-white hover:bg-white/20"
                     }`}
                   >
-                    {processingPlanId === plan.id && (
-                      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                    )}
-                    {processingPlanId === plan.id
-                      ? "Redirecting\u2026"
-                      : hasActiveSub
-                        ? `Add ${plan.duration} ${plan.duration === 1 ? "day" : "days"}`
-                        : `Get ${plan.duration} ${plan.duration === 1 ? "day" : "days"}`}
+                    {hasActiveSub
+                      ? `Add ${plan.duration} ${plan.duration === 1 ? "day" : "days"}`
+                      : `Get ${plan.duration} ${plan.duration === 1 ? "day" : "days"}`}
                   </button>
                 </div>
               );
             })}
           </div>
         )}
+      <PaymentModal
+        open={!!checkoutPlan}
+        plan={checkoutPlan}
+        onClose={() => setCheckoutPlan(null)}
+        onSuccess={() => {
+          // On success the user's subscription is active server-side. Navigate
+          // them home after a short beat so they see the success state first.
+          setTimeout(() => router.push("/"), 1500);
+        }}
+      />
     </div>
   );
 }
