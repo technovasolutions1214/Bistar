@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Tailwind v4 only auto-scans the consuming app's files — classes used inside
+ * the @novaflix/ui workspace package (Modal, Input, Button, …) never reach
+ * the emitted CSS without this source glob. */
+@source "../../../../packages/ui/src/**/*.{ts,tsx}";
+
 :root {
   --background: #0f172a;
   --foreground: #e2e8f0;
