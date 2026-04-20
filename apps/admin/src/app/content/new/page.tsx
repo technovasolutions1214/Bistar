@@ -64,15 +64,18 @@ export default function NewContentPage() {
       let bannerUrl = "";
 
       if (thumbnailFile) {
+        // Writes must land under /thumbnails/** per storage.rules — the
+        // previous /content/thumbnails/** path was rejected by rules and
+        // showed only a generic save-failure toast.
         thumbnailUrl = await uploadFile(
           thumbnailFile,
-          `content/thumbnails/${Date.now()}_${thumbnailFile.name}`
+          `thumbnails/content/${Date.now()}_${thumbnailFile.name}`
         );
       }
       if (bannerFile) {
         bannerUrl = await uploadFile(
           bannerFile,
-          `content/banners/${Date.now()}_${bannerFile.name}`
+          `banners/content/${Date.now()}_${bannerFile.name}`
         );
       }
 

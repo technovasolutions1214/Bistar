@@ -55,6 +55,8 @@ export default function EditContentPage() {
   const [videoEpisode, setVideoEpisode] = useState("");
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoExternalUrl, setVideoExternalUrl] = useState("");
+  const [videoThumbnailFile, setVideoThumbnailFile] = useState<File | null>(null);
+  const [videoThumbnailPreview, setVideoThumbnailPreview] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [editingVideoId, setEditingVideoId] = useState<string | null>(null);
@@ -136,15 +138,19 @@ export default function EditContentPage() {
       let bannerUrl = existingBanner;
 
       if (thumbnailFile) {
+        // Storage rules only permit writes under /thumbnails/** and
+        // /banners/** — earlier /content/thumbnails/** writes were silently
+        // denied by security rules, showing a generic "Failed to save
+        // content" toast with no obvious cause.
         thumbnailUrl = await uploadFile(
           thumbnailFile,
-          `content/thumbnails/${Date.now()}_${thumbnailFile.name}`
+          `thumbnails/content/${contentId}/${Date.now()}_${thumbnailFile.name}`
         );
       }
       if (bannerFile) {
         bannerUrl = await uploadFile(
           bannerFile,
-          `content/banners/${Date.now()}_${bannerFile.name}`
+          `banners/content/${contentId}/${Date.now()}_${bannerFile.name}`
         );
       }
 
@@ -173,13 +179,21 @@ export default function EditContentPage() {
   };
 
   const handleVideoUpload = async () => {
-    if (!videoFile || !videoTitle.trim()) return;
+    if (!videoFile || !videoTitle.trim() || !videoThumbnailFile) return;
     setUploading(true);
     setUploadProgress(0);
 
     try {
       const videoDocRef = doc(collection(db(), "content", contentId, "videos"));
       const videoId = videoDocRef.id;
+
+      // Upload thumbnail first (small, quick). Path lives under /thumbnails/**
+      // to satisfy storage.rules.
+      const thumbnailUrl = await uploadFile(
+        videoThumbnailFile,
+        `thumbnails/videos/${contentId}/${videoId}_${Date.now()}_${videoThumbnailFile.name}`,
+      );
+
       const storagePath = `videos/${contentId}/${videoId}/original/${videoFile.name}`;
       const storageRef = ref(storage(),storagePath);
       const task = uploadBytesResumable(storageRef, videoFile);
@@ -208,6 +222,7 @@ export default function EditContentPage() {
               episode: videoEpisode ? parseInt(videoEpisode) : null,
               videoUrl: url,
               storageRef: storagePath,
+              thumbnailUrl,
               duration: 0,
               status: "processing",
               order: videos.length,
@@ -227,6 +242,7 @@ export default function EditContentPage() {
               episode: videoEpisode ? parseInt(videoEpisode) : undefined,
               videoUrl: url,
               storageRef: storagePath,
+              thumbnailUrl,
               duration: 0,
               status: "processing",
               order: videos.length,
@@ -234,12 +250,6 @@ export default function EditContentPage() {
             } as unknown as Video,
           ]);
 
-          // Reset form
-          setVideoTitle("");
-          setVideoDescription("");
-          setVideoSeason("");
-          setVideoEpisode("");
-          setVideoFile(null);
           setUploadProgress(0);
           setUploading(false);
           setShowVideoUpload(false);
@@ -249,7 +259,7 @@ export default function EditContentPage() {
       );
     } catch (err) {
       console.error("Video upload failed:", err);
-      toast.error("Video upload failed");
+      toast.error(err instanceof Error ? err.message : "Video upload failed");
       setUploading(false);
     }
   };
@@ -257,7 +267,7 @@ export default function EditContentPage() {
   const handleVideoUrlAdd = async () => {
     const trimmedUrl = videoExternalUrl.trim();
     const trimmedTitle = videoTitle.trim();
-    if (!trimmedUrl || !trimmedTitle) return;
+    if (!trimmedUrl || !trimmedTitle || !videoThumbnailFile) return;
     if (!/^https:\/\//i.test(trimmedUrl)) {
       toast.error("Video URL must start with https://");
       return;
@@ -266,6 +276,12 @@ export default function EditContentPage() {
     try {
       const videoDocRef = doc(collection(db(), "content", contentId, "videos"));
       const videoId = videoDocRef.id;
+
+      const thumbnailUrl = await uploadFile(
+        videoThumbnailFile,
+        `thumbnails/videos/${contentId}/${videoId}_${Date.now()}_${videoThumbnailFile.name}`,
+      );
+
       // No Storage upload, no transcoding pipeline. The pasted URL is what we
       // play directly — works for HLS .m3u8 (Cloudflare Stream, Mux, Bunny)
       // or any direct .mp4. status: "ready" so the watch page picks videoUrl
@@ -277,6 +293,7 @@ export default function EditContentPage() {
         season: videoSeason ? parseInt(videoSeason) : null,
         episode: videoEpisode ? parseInt(videoEpisode) : null,
         videoUrl: trimmedUrl,
+        thumbnailUrl,
         source: "external",
         duration: 0,
         status: "ready",
@@ -293,6 +310,7 @@ export default function EditContentPage() {
           season: videoSeason ? parseInt(videoSeason) : undefined,
           episode: videoEpisode ? parseInt(videoEpisode) : undefined,
           videoUrl: trimmedUrl,
+          thumbnailUrl,
           duration: 0,
           status: "ready",
           order: videos.length,
@@ -305,7 +323,7 @@ export default function EditContentPage() {
       toast.success("Video added");
     } catch (err) {
       console.error("Failed to add video by URL:", err);
-      toast.error("Failed to add video");
+      toast.error(err instanceof Error ? err.message : "Failed to add video");
       setUploading(false);
     }
   };
@@ -317,6 +335,8 @@ export default function EditContentPage() {
     setVideoEpisode("");
     setVideoFile(null);
     setVideoExternalUrl("");
+    setVideoThumbnailFile(null);
+    setVideoThumbnailPreview("");
     setVideoSourceMode("upload");
   };
 
@@ -584,6 +604,18 @@ export default function EditContentPage() {
                     </button>
                   </div>
 
+                  {/* Thumbnail */}
+                  <div className="w-20 h-12 rounded-md overflow-hidden bg-[var(--card)] flex-shrink-0 flex items-center justify-center border border-[var(--border)]">
+                    {video.thumbnailUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={video.thumbnailUrl} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <svg className="w-4 h-4 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                      </svg>
+                    )}
+                  </div>
+
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     {editingVideoId === video.id ? (
@@ -770,6 +802,37 @@ export default function EditContentPage() {
             </div>
           )}
 
+          {/* Video thumbnail — required regardless of source mode */}
+          <div>
+            <label className="block text-sm font-medium mb-2">Thumbnail *</label>
+            <div className="flex items-center gap-4">
+              {videoThumbnailPreview && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={videoThumbnailPreview}
+                  alt="Video thumbnail preview"
+                  className="w-24 h-16 rounded-lg object-cover bg-[var(--background)]"
+                />
+              )}
+              <label className="flex-1 flex flex-col items-center justify-center px-4 py-4 rounded-lg border-2 border-dashed border-[var(--border)] hover:border-[var(--primary)] cursor-pointer transition-colors">
+                <span className="text-sm text-[var(--muted)]">
+                  {videoThumbnailFile ? videoThumbnailFile.name : "Click to upload a thumbnail image"}
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setVideoThumbnailFile(file);
+                    if (file) handleFilePreview(file, setVideoThumbnailPreview);
+                    else setVideoThumbnailPreview("");
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+
           {/* Progress bar */}
           {uploading && (
             <div className="space-y-2 p-4 rounded-lg bg-[var(--background)] border border-[var(--border)]">
@@ -807,7 +870,7 @@ export default function EditContentPage() {
               <Button
                 loading={uploading}
                 onClick={handleVideoUpload}
-                disabled={!videoFile || !videoTitle.trim()}
+                disabled={!videoFile || !videoTitle.trim() || !videoThumbnailFile}
               >
                 Upload
               </Button>
@@ -815,7 +878,7 @@ export default function EditContentPage() {
               <Button
                 loading={uploading}
                 onClick={handleVideoUrlAdd}
-                disabled={!videoExternalUrl.trim() || !videoTitle.trim()}
+                disabled={!videoExternalUrl.trim() || !videoTitle.trim() || !videoThumbnailFile}
               >
                 Add Video
               </Button>
