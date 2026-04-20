@@ -17,6 +17,7 @@ import { db } from "@novaflix/firebase-config";
 import { Skeleton } from "@novaflix/ui";
 import type { Content, SiteSettings } from "@novaflix/shared";
 import { ContentCarousel } from "@/components/content-carousel";
+import { SeriesInfiniteGrid } from "@/components/series-infinite-grid";
 import { SubscriptionGate } from "@/components/subscription-gate";
 
 interface GeneralSettings {
@@ -28,8 +29,6 @@ export default function HomePage() {
   const [siteSettings, setSiteSettings] = useState<SiteSettings | null>(null);
   const [generalSettings, setGeneralSettings] = useState<GeneralSettings | null>(null);
   const [trending, setTrending] = useState<Content[]>([]);
-  const [latest, setLatest] = useState<Content[]>([]);
-  const [series, setSeries] = useState<Content[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -84,30 +83,8 @@ export default function HomePage() {
           trendingSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Content)
         );
 
-        // Fetch latest releases
-        const latestQ = query(
-          collection(db(),"content"),
-          where("status", "==", "published"),
-          orderBy("createdAt", "desc"),
-          limit(20)
-        );
-        const latestSnap = await getDocs(latestQ);
-        setLatest(
-          latestSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Content)
-        );
-
-        // Fetch web series
-        const seriesQ = query(
-          collection(db(),"content"),
-          where("status", "==", "published"),
-          where("type", "==", "series"),
-          orderBy("createdAt", "desc"),
-          limit(20)
-        );
-        const seriesSnap = await getDocs(seriesQ);
-        setSeries(
-          seriesSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Content)
-        );
+        // Web series are loaded by SeriesInfiniteGrid with its own cursor-
+        // paginated fetch — no need to hydrate them here.
       } catch (error) {
         console.error("Failed to fetch homepage data:", error);
       } finally {
@@ -236,15 +213,15 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* Content Carousels */}
-      <div className="py-8 space-y-2">
+      {/* Content sections */}
+      <div className="py-8">
         <ContentCarousel title="Trending Now" items={trending} />
-        <ContentCarousel title="Latest Releases" items={latest} />
-        <ContentCarousel title="Web Series" items={series} />
+        <SeriesInfiniteGrid title="Web Series" />
       </div>
 
-      {/* Empty state when no content exists */}
-      {!hero && trending.length === 0 && latest.length === 0 && series.length === 0 && (
+      {/* Empty state when no hero + no trending content. Series state lives
+       * inside SeriesInfiniteGrid, which self-hides when empty. */}
+      {!hero && trending.length === 0 && (
         <div className="flex flex-col items-center justify-center py-32 px-4 text-center">
           <svg
             className="w-20 h-20 text-[var(--muted)] mb-6"
