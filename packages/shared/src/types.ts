@@ -93,8 +93,17 @@ export interface SiteSettings {
 }
 
 export interface AnalyticsEntry {
+  // IST calendar date (YYYY-MM-DD) the row represents.
   date: string;
+  // ISO UTC instants bounding the IST day; helpful for verifying intent.
+  windowStart?: string;
+  windowEnd?: string;
+  // Per-day deltas — counted within [windowStart, windowEnd).
   newUsers: number;
+  newSubscriptions?: number;
+  revenue?: number;
+  revenueCurrency?: string;
+  // Snapshots taken at windowEnd (the moment the aggregator ran).
   totalUsers: number;
   activeSubscriptions: number;
   totalPublishedContent: number;

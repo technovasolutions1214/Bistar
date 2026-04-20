@@ -39,6 +39,17 @@ export const confirmPayment = onCall({ region: "asia-south1" }, async (request) 
   const durationDays: number = plan.duration ?? 30;
   const endDate = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000);
 
+  // Flip the transaction to success first so daily revenue picks it up. The
+  // transaction doc is created (status: "pending") when the user initiates
+  // payment; without this update it would stay pending forever.
+  await db.doc(`transactions/${transactionId}`).set(
+    {
+      status: "success",
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+
   await db.doc(`users/${userId}`).set(
     {
       subscription: {
