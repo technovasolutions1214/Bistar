@@ -27,13 +27,34 @@ service cloud.firestore {
       allow read: if isOwner(userId) || isAdmin();
       // Explicit list for admin collection queries (e.g. getCountFromServer)
       allow list: if isAdmin();
-      // Owners can write their own doc but NOT subscription or role fields
-      allow write: if isAdmin()
+
+      // Create is separate from update: on a create `resource` is null, so
+      // calling diff(resource.data) throws and the whole rule silently denies.
+      // The original "allow write" lumped both together, which meant every
+      // non-admin signup was rejected — new users never got a Firestore doc
+      // even though their Auth record was created.
+      //
+      // Owners can self-create, but only with role="user" and a null
+      // subscription so creation can't be used to grant admin/paid access.
+      allow create: if isAdmin()
+        || (
+          isOwner(userId)
+          && request.resource.data.role == "user"
+          && (
+            !("subscription" in request.resource.data)
+            || request.resource.data.subscription == null
+          )
+        );
+
+      // Owners can update everything except subscription + role.
+      allow update: if isAdmin()
         || (
           isOwner(userId)
           && (!request.resource.data.diff(resource.data).affectedKeys()
               .hasAny(["subscription", "role"]))
         );
+
+      allow delete: if isAdmin();
     }
 
     // ---------- Content ----------

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { FieldValue } from "firebase-admin/firestore";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -82,6 +83,23 @@ export async function POST(request: NextRequest) {
         displayName: formattedPhone,
       });
       uid = newUser.uid;
+    }
+
+    // Ensure the Firestore user doc exists. Client-side createUserDoc can race
+    // with a closed tab or slow network; doing it here (idempotent via merge)
+    // guarantees the admin Users list picks up every phone signup.
+    const userRef = getAdminDb().collection("users").doc(uid);
+    const existing = await userRef.get();
+    if (!existing.exists) {
+      await userRef.set({
+        uid,
+        phone: formattedPhone,
+        displayName: formattedPhone,
+        role: "user",
+        subscription: null,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
     }
 
     const token = await getAdminAuth().createCustomToken(uid);
