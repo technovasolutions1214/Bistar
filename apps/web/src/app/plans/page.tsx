@@ -46,7 +46,12 @@ export default function PlansPage() {
   }, []);
 
   function handleSubscribe(plan: Plan) {
-    if (!firebaseUser || !userData) {
+    // Only require firebaseUser here. userData is nice-to-have for the header
+    // UI but the payment pipeline (PaymentModal → /api/payment/payu/create →
+    // /api/payment/status) only needs a Firebase ID token. Blocking on
+    // userData was bouncing brand-new users through /auth/login → / in a loop
+    // whenever their Firestore doc hadn't landed yet.
+    if (!firebaseUser) {
       router.push("/auth/login");
       return;
     }

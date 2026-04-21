@@ -1,7 +1,7 @@
 "use client";
 import React, { createContext, useContext, useEffect, useState, useMemo } from "react";
 import { onAuthStateChanged, signOut as firebaseSignOut, type User as FirebaseUser } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@novaflix/firebase-config";
 import type { User } from "@novaflix/shared";
 
@@ -31,9 +31,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setFirebaseUser(user);
       if (user) {
         try {
-          const userDoc = await getDoc(doc(db(), "users", user.uid));
+          const userRef = doc(db(), "users", user.uid);
+          const userDoc = await getDoc(userRef);
           if (userDoc.exists()) {
             setUserData({ uid: user.uid, ...userDoc.data() } as User);
+          } else {
+            // Auth user exists but no Firestore doc — either the signup race
+            // dropped it or the user signed in before /users rules allowed
+            // client creates. Self-heal so the rest of the app (plans page,
+            // subscription check, admin list) sees a consistent state.
+            const fresh = {
+              uid: user.uid,
+              role: "user" as const,
+              subscription: null,
+              displayName: user.displayName || user.phoneNumber || "",
+              email: user.email || "",
+              photoURL: user.photoURL || "",
+              phone: user.phoneNumber || "",
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            };
+            try {
+              await setDoc(userRef, fresh);
+              setUserData(fresh as unknown as User);
+            } catch (writeErr) {
+              console.error("Failed to self-heal user doc:", writeErr);
+              setUserData(null);
+            }
           }
         } catch (error) {
           console.error("Failed to fetch user data:", error);
