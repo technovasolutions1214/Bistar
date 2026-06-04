@@ -72,13 +72,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const hasActiveSubscription = useMemo(() => {
+    // Anonymous (guest-checkout) sessions are never treated as subscribed. The
+    // webhook may activate a sub on the throwaway anon user, but the purchase
+    // only counts once it's claimed onto a real phone account at sign-in.
+    if (firebaseUser?.isAnonymous) return false;
     if (!userData?.subscription) return false;
     if (userData.subscription.status !== "active") return false;
     const endDate =
       (userData.subscription.endDate as any)?.toDate?.() ??
       new Date(userData.subscription.endDate as any);
     return endDate > new Date();
-  }, [userData]);
+  }, [userData, firebaseUser]);
 
   const signOut = async () => {
     await firebaseSignOut(auth());

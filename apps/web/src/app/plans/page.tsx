@@ -46,16 +46,9 @@ export default function PlansPage() {
   }, []);
 
   function handleSubscribe(plan: Plan) {
-    // Only require firebaseUser here. userData is nice-to-have for the header
-    // UI but the payment pipeline (PaymentModal → /api/payment/payu/create →
-    // /api/payment/status) only needs a Firebase ID token. Blocking on
-    // userData was bouncing brand-new users through /auth/login → / in a loop
-    // whenever their Firestore doc hadn't landed yet.
-    if (!firebaseUser) {
-      router.push("/auth/login");
-      return;
-    }
-
+    // We no longer bounce logged-out users to /auth/login. The PaymentModal now
+    // handles both cases: a signed-in user pays directly, while a guest pays
+    // first (anonymous session) and signs in afterwards to claim the purchase.
     setError(null);
 
     track("InitiateCheckout", {

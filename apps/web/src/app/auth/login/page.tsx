@@ -45,6 +45,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [redirecting, setRedirecting] = useState(false);
+  const [claiming, setClaiming] = useState(false);
 
   const [widgetCfg, setWidgetCfg] = useState<{ widgetId: string; tokenAuth: string } | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
@@ -52,12 +53,32 @@ export default function LoginPage() {
   const [widgetReady, setWidgetReady] = useState(false);
   const initDone = useRef(false);
 
+  // Prefill the phone when arriving from a guest-checkout handoff
+  // (/auth/login?claimPhone=+91...). Read straight off the URL so we avoid the
+  // Suspense boundary that useSearchParams() would require.
   useEffect(() => {
-    if (firebaseUser) {
+    if (typeof window === "undefined") return;
+    const cp = new URLSearchParams(window.location.search).get("claimPhone");
+    if (!cp) return;
+    const codes = ["+971", "+91", "+61", "+44", "+1"]; // longest-prefix first
+    const m = codes.find((c) => cp.startsWith(c));
+    if (m) {
+      setCountryCode(m);
+      setPhone(cp.slice(m.length));
+    } else {
+      setPhone(cp.replace(/^\+/, ""));
+    }
+  }, []);
+
+  // Send signed-in (non-anonymous) users home. Anonymous guest sessions stay on
+  // this page so they can verify their number, and the redirect is suppressed
+  // while a claim reconcile is in flight.
+  useEffect(() => {
+    if (firebaseUser && !firebaseUser.isAnonymous && !claiming) {
       setRedirecting(true);
       router.replace("/");
     }
-  }, [firebaseUser, router]);
+  }, [firebaseUser, router, claiming]);
 
   useEffect(() => {
     fetch("/api/auth/msg91-config")
@@ -92,7 +113,7 @@ export default function LoginPage() {
     }
   }, [scriptLoaded, widgetCfg]);
 
-  if (redirecting || firebaseUser) return null;
+  if (redirecting || (firebaseUser && !firebaseUser.isAnonymous)) return null;
 
   async function createUserDoc(
     uid: string,
@@ -192,6 +213,9 @@ export default function LoginPage() {
           return;
         }
         try {
+          // Suppress the "already signed in" auto-redirect until we've had the
+          // chance to claim any guest payment made against this number.
+          setClaiming(true);
           const fullPhone = `${countryCode}${phone}`;
           const res = await fetch("/api/auth/verify-otp", {
             method: "POST",
@@ -210,8 +234,30 @@ export default function LoginPage() {
             },
             "phone",
           );
+
+          // Claim any guest payment recorded against this verified number.
+          let claimed = 0;
+          try {
+            const token = await result.user.getIdToken();
+            const rc = await fetch("/api/subscription/reconcile", {
+              method: "POST",
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            const rb = await rc.json().catch(() => ({ claimed: 0 }));
+            claimed = rb.claimed || 0;
+          } catch (reErr) {
+            console.error("Subscription reconcile failed:", reErr);
+          }
+
+          if (claimed > 0) {
+            // Hard reload so the freshly-granted subscription is reflected
+            // everywhere (auth-context reads the user doc on load).
+            window.location.href = "/";
+            return;
+          }
           router.push("/");
         } catch (err) {
+          setClaiming(false);
           setError(err instanceof Error ? err.message : "Failed to verify OTP");
         } finally {
           setLoading(false);
