@@ -29,13 +29,8 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
       - name: Install function dependencies
-        run: cd functions && npm ci
+        run: cd functions && npm install
 
       - name: Build functions
         run: cd functions && npm run build
@@ -43,7 +38,7 @@ jobs:
       - name: Deploy to Firebase
         uses: w9jds/firebase-action@master
         with:
-          args: deploy --only functions,firestore:rules,storage
+          args: deploy --only functions,firestore:rules,storage --force
         env:
           GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
