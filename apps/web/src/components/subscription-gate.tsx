@@ -57,19 +57,22 @@ export function SubscriptionGate({ requireGate, children }: SubscriptionGateProp
           with a NovaFlix subscription plan.
         </p>
 
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+        <div className="flex flex-col items-center gap-3">
           <Link
             href="/plans"
-            className="inline-flex items-center justify-center px-8 py-3 bg-[var(--primary)] text-white font-semibold rounded-lg hover:bg-[var(--primary-hover)] transition-colors text-base"
+            className="inline-flex items-center justify-center px-10 py-3.5 bg-[var(--primary)] text-white font-semibold rounded-lg hover:bg-[var(--primary-hover)] transition-colors text-base shadow-lg shadow-[var(--primary)]/20"
           >
-            View Plans
+            Subscribe Now
           </Link>
           {!firebaseUser && (
             <Link
               href="/auth/login"
-              className="inline-flex items-center justify-center px-8 py-3 bg-[var(--card)] text-white font-semibold rounded-lg border border-[var(--border)] hover:bg-[var(--card-hover)] transition-colors text-base"
+              className="text-sm text-[var(--muted)] hover:text-white transition-colors"
             >
-              Sign In
+              Already have an account?{" "}
+              <span className="text-[var(--foreground)] font-medium underline underline-offset-2">
+                Sign in
+              </span>
             </Link>
           )}
         </div>
