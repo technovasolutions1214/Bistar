@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Generate signed URL with 4-hour expiry
+    // Generate signed URL with 1-hour expiry
     const bucket = getAdminStorage().bucket(
       process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
     );
