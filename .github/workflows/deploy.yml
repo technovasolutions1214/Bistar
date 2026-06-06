@@ -1,15 +1,11 @@
 name: Deploy Cloud Functions
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "firebase/functions/**"
-      - "firebase/firestore.rules"
-      - "firebase/storage.rules"
-      - "firebase/firebase.json"
-
+  # Manual-only. The CI deploy service account lacks the IAM to deploy Cloud
+  # Functions (needs iam.serviceAccounts.actAs on the runtime SA + Cloud
+  # Functions/Build/Run roles), so a push trigger just fails on every functions
+  # change. Functions/rules are deployed manually via `firebase deploy` as an
+  # owner. Re-add the push trigger below once the SA has been granted the roles.
   workflow_dispatch:
 
 jobs:
