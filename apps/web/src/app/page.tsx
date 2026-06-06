@@ -19,6 +19,7 @@ import type { Content, SiteSettings } from "@novaflix/shared";
 import { ContentCarousel } from "@/components/content-carousel";
 import { SeriesInfiniteGrid } from "@/components/series-infinite-grid";
 import { SubscriptionGate } from "@/components/subscription-gate";
+import { LandingHero } from "@/components/landing-hero";
 
 interface GeneralSettings {
   requireSubscriptionToBrowse?: boolean;
@@ -131,7 +132,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen pt-16">
-      <SubscriptionGate requireGate={generalSettings?.requireSubscriptionToBrowse || false}>
+      <SubscriptionGate requireGate={generalSettings?.requireSubscriptionToBrowse || false} fallback={<LandingHero />}>
       {/* Hero Banner */}
       {hero && (
         <section className="relative h-[70vh] sm:h-[80vh] w-full">

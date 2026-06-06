@@ -6,9 +6,11 @@ import { useAuth } from "@/lib/auth-context";
 interface SubscriptionGateProps {
   requireGate: boolean;
   children: React.ReactNode;
+  /** Optional custom paywall to render when gated (e.g. the home landing hero). */
+  fallback?: React.ReactNode;
 }
 
-export function SubscriptionGate({ requireGate, children }: SubscriptionGateProps) {
+export function SubscriptionGate({ requireGate, children, fallback }: SubscriptionGateProps) {
   const { hasActiveSubscription, loading, firebaseUser } = useAuth();
 
   // Show loading skeleton while auth state is resolving and gate is required
@@ -29,6 +31,11 @@ export function SubscriptionGate({ requireGate, children }: SubscriptionGateProp
   // Don't gate if not required or user has subscription
   if (!requireGate || hasActiveSubscription) {
     return <>{children}</>;
+  }
+
+  // Gated: let the caller supply a custom paywall (e.g. the home landing hero).
+  if (fallback) {
+    return <>{fallback}</>;
   }
 
   // When gate is active: completely hide content, show full paywall
