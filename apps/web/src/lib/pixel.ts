@@ -4,7 +4,7 @@
 
 type FbqArgs =
   | ["init", string]
-  | ["track", string, Record<string, unknown>?]
+  | ["track", string, Record<string, unknown>?, { eventID?: string }?]
   | ["trackCustom", string, Record<string, unknown>?]
   | ["consent", "grant" | "revoke"];
 
@@ -26,10 +26,16 @@ export function isPixelEnabled(): boolean {
   return fbqOrNull() !== null;
 }
 
-export function track(event: string, params?: Record<string, unknown>): void {
+export function track(
+  event: string,
+  params?: Record<string, unknown>,
+  options?: { eventID?: string },
+): void {
   const fbq = fbqOrNull();
   if (!fbq) return;
-  if (params) fbq("track", event, params);
+  // eventID lets a browser event dedupe against the server-side CAPI event.
+  if (params && options) fbq("track", event, params, options);
+  else if (params) fbq("track", event, params);
   else fbq("track", event);
 }
 

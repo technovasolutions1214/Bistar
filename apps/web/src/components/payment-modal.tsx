@@ -8,6 +8,7 @@ import { Button, Input } from "@novaflix/ui";
 import type { Plan } from "@novaflix/shared";
 import { useAuth } from "@/lib/auth-context";
 import { track } from "@/lib/pixel";
+import { getAttribution } from "@/lib/attribution";
 
 type ModalStatus =
   | "collect" // guest: entering phone before payment
@@ -125,12 +126,17 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
           planId?: string;
         };
         if (body.status === "success") {
-          track("Subscribe", {
-            content_ids: body.planId ? [body.planId] : undefined,
-            value: typeof body.amount === "number" ? body.amount : undefined,
-            currency: body.currency || "INR",
-            transaction_id: id,
-          });
+          // Fire Purchase with eventID=txnid so it dedupes against the
+          // server-side CAPI Purchase the webhook trigger sends.
+          track(
+            "Purchase",
+            {
+              content_ids: body.planId ? [body.planId] : undefined,
+              value: typeof body.amount === "number" ? body.amount : undefined,
+              currency: body.currency || "INR",
+            },
+            { eventID: id },
+          );
           if (isGuestRef.current) {
             // Guest must sign in to bind the purchase to a real account.
             finish("claim", "");
@@ -177,6 +183,7 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
           finish("error", body.error || "Couldn't start the payment. Please try again.");
           return;
         }
+        recordAttribution(token, body.txnid);
         setPaymentUrl(body.paymentUrl);
         setTxnId(body.txnid);
         setStatus("waiting");
@@ -242,6 +249,7 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
         return;
       }
 
+      recordAttribution(token, body.txnid);
       setPaymentUrl(body.paymentUrl);
       setTxnId(body.txnid);
       setStatus("waiting");
@@ -419,6 +427,16 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
       </div>
     </div>
   );
+}
+
+// Best-effort: record the Meta attribution bundle against this transaction so
+// the server can fire a matched CAPI Purchase on success. Never blocks checkout.
+function recordAttribution(token: string, txnid: string): void {
+  void fetch("/api/checkout/attribution", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ txnid, attribution: getAttribution() }),
+  }).catch(() => {});
 }
 
 function statusHeading(s: ModalStatus): string {

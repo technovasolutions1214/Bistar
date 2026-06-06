@@ -15,7 +15,7 @@ export interface User {
   email: string;
   phone?: string;
   photoURL?: string;
-  role: "user" | "admin";
+  role: "user" | "admin" | "marketing";
   subscription: UserSubscription | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;

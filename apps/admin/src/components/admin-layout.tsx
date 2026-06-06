@@ -1,23 +1,36 @@
 "use client";
-import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/sidebar";
 import { Loader } from "@novaflix/ui";
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { firebaseUser, userData, loading, isAdmin } = useAuth();
+  const { firebaseUser, userData, loading, isAdmin, isMarketing } = useAuth();
   const router = useRouter();
-  const [redirecting, setRedirecting] = useState(false);
+  const pathname = usePathname();
+
+  const isMarketingRoute =
+    pathname === "/marketing" || pathname.startsWith("/marketing/");
+
+  // A marketing-only user (NOT admin) may access ONLY /marketing/*. Everything
+  // else in the dashboard is admin-only.
+  const marketingBlocked =
+    !loading && !!userData && isMarketing && !isAdmin && !isMarketingRoute;
 
   useEffect(() => {
     if (!loading && !firebaseUser) {
-      setRedirecting(true);
       router.replace("/login");
     }
   }, [loading, firebaseUser, router]);
 
-  if (loading || redirecting) {
+  useEffect(() => {
+    if (marketingBlocked) {
+      router.replace("/marketing");
+    }
+  }, [marketingBlocked, router]);
+
+  if (loading || !firebaseUser) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
         <Loader />
@@ -25,7 +38,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!userData || !isAdmin) {
+  if (!userData || (!isAdmin && !isMarketing)) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4">
         <div className="w-16 h-16 rounded-full bg-[var(--danger)]/10 flex items-center justify-center">
@@ -34,7 +47,17 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           </svg>
         </div>
         <h1 className="text-2xl font-bold">Unauthorized</h1>
-        <p className="text-[var(--muted)]">You do not have admin access to this dashboard.</p>
+        <p className="text-[var(--muted)]">You do not have access to this dashboard.</p>
+      </div>
+    );
+  }
+
+  // Marketing-only user landed on a non-marketing route — show the loader while
+  // the effect above redirects them to /marketing. They never see this content.
+  if (marketingBlocked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
+        <Loader />
       </div>
     );
   }

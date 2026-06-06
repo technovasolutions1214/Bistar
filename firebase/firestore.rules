@@ -21,6 +21,15 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    // Marketing staff OR admin — gates the marketing panel's data.
+    function isMarketingStaff() {
+      return isAuthenticated()
+        && (
+          request.auth.token.admin == true
+          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ["admin", "marketing"]
+        );
+    }
+
     // ---------- Users ----------
 
     match /users/{userId} {
@@ -101,6 +110,30 @@ service cloud.firestore {
 
     match /analytics/{docId} {
       allow read, write: if isAdmin();
+    }
+
+    // ---------- Marketing: Meta Pixels ----------
+
+    match /pixels/{slug} {
+      // Public-safe: { slug, pixelId, label, isDefault, adAccounts, hasToken }.
+      // NO CAPI token here — the consumer site reads this to load the right pixel.
+      allow read: if true;
+      allow create, update, delete: if isMarketingStaff();
+    }
+
+    match /pixelSecrets/{slug} {
+      // Server-only (CAPI access token). Never client-readable; admin SDK bypasses.
+      allow read: if false;
+      allow write: if isMarketingStaff();
+    }
+
+    // ---------- Marketing: purchase attribution (source per txn) ----------
+
+    match /attributions/{txnId} {
+      // Written server-side (admin SDK) at checkout + on purchase. Marketing
+      // staff read it for the conversion analytics.
+      allow read: if isMarketingStaff();
+      allow write: if false;
     }
   }
 }

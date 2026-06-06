@@ -13,7 +13,9 @@ interface AuthContextType {
   firebaseUser: FirebaseUser | null;
   userData: User | null;
   loading: boolean;
+  role: User["role"] | null;
   isAdmin: boolean;
+  isMarketing: boolean;
   signOut: () => Promise<void>;
 }
 
@@ -21,7 +23,9 @@ const AuthContext = createContext<AuthContextType>({
   firebaseUser: null,
   userData: null,
   loading: true,
+  role: null,
   isAdmin: false,
+  isMarketing: false,
   signOut: async () => {},
 });
 
@@ -59,10 +63,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUserData(null);
   };
 
-  const isAdmin = userData?.role === "admin";
+  const role = userData?.role ?? null;
+  const isAdmin = role === "admin";
+  const isMarketing = role === "marketing";
 
   return (
-    <AuthContext.Provider value={{ firebaseUser, userData, loading, isAdmin, signOut }}>
+    <AuthContext.Provider
+      value={{ firebaseUser, userData, loading, role, isAdmin, isMarketing, signOut }}
+    >
       {children}
     </AuthContext.Provider>
   );
