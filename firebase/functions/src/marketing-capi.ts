@@ -42,10 +42,11 @@ export const onPurchaseSendCapi = onDocumentUpdated(
 
     const value = typeof after.amount === "number" ? after.amount : undefined;
     const currency = (after.currency as string) || "INR";
+    // Revenue (value/currency) is used only for the CAPI payload below — it is
+    // NOT persisted onto the attribution doc, which marketing staff can read.
+    // Revenue stays on the admin-only transaction.
     const purchasedBase = {
       status: "purchased",
-      value: value ?? null,
-      currency,
       purchasedAt: new Date(),
     };
 

@@ -7,12 +7,13 @@ import { useAuth } from "@/lib/auth-context";
 import { Loader } from "@novaflix/ui";
 
 interface AttrRow {
+  txnid: string;
   pixelSlug?: string;
   adAccount?: string;
   campaignId?: string;
   adId?: string;
   country?: string;
-  value: number;
+  value: number; // 0 for marketing (revenue is admin-only); joined from transactions for admins
   capiStatus?: string;
   at: number; // ms
 }
@@ -106,16 +107,35 @@ export default function MarketingOverviewPage() {
         lbl[d.id] = (d.data().label as string) || d.id;
       });
       setLabels(lbl);
+
+      // Revenue lives ONLY on the admin-only `transactions` collection. Join it
+      // in by txnid for admins; marketing staff never read it (and rules deny).
+      const amountByTxn: Record<string, number> = {};
+      if (isAdmin) {
+        try {
+          const txSnap = await getDocs(
+            query(collection(db(), "transactions"), where("status", "==", "success"), limit(2000))
+          );
+          txSnap.docs.forEach((d) => {
+            const a = d.data().amount;
+            if (typeof a === "number") amountByTxn[d.id] = a;
+          });
+        } catch (err) {
+          console.error("Failed to load revenue:", err);
+        }
+      }
+
       setRows(
         attrSnap.docs.map((d) => {
           const x = d.data();
           return {
+            txnid: d.id,
             pixelSlug: x.pixelSlug as string | undefined,
             adAccount: x.adAccount as string | undefined,
             campaignId: x.campaignId as string | undefined,
             adId: x.adId as string | undefined,
             country: x.country as string | undefined,
-            value: typeof x.value === "number" ? x.value : 0,
+            value: amountByTxn[d.id] ?? 0,
             capiStatus: x.capiStatus as string | undefined,
             at: tsToMs(x.purchasedAt ?? x.createdAt),
           };
@@ -126,7 +146,7 @@ export default function MarketingOverviewPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => {
     load();
@@ -206,7 +226,7 @@ export default function MarketingOverviewPage() {
             Conversions attributed from captured ad parameters.
             {isAdmin
               ? " Ad spend / ROAS would require the Meta Marketing API and isn't included here."
-              : " Revenue figures are visible to admins only."}
+              : " Revenue figures are admin-only."}
           </p>
         </div>
       )}

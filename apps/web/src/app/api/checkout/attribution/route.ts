@@ -64,9 +64,9 @@ export async function POST(request: NextRequest) {
         {
           txnid,
           userId: uid,
-          planId: tx.planId ?? null,
-          amount: typeof tx.amount === "number" ? tx.amount : null,
-          currency: typeof tx.currency === "string" ? tx.currency : "INR",
+          // Revenue (amount/planId/currency) is intentionally NOT stored here:
+          // this doc is readable by marketing staff. Revenue lives only on the
+          // admin-only transaction and is joined in for admins in the dashboard.
           pixelSlug: str(a.pixelSlug),
           pixelId: str(a.pixelId),
           adAccount: str(a.acct),
