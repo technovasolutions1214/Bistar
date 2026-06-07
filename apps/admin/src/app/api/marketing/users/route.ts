@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 
 /**
  * Admin-only management of marketing-staff accounts (email + password,
@@ -13,9 +13,9 @@ async function callerIsAdmin(request: NextRequest): Promise<boolean> {
   const m = (request.headers.get("authorization") || "").match(/^Bearer (.+)$/);
   if (!m) return false;
   try {
-    const decoded = await adminAuth.verifyIdToken(m[1]);
+    const decoded = await getAdminAuth().verifyIdToken(m[1]);
     if (decoded.admin === true) return true;
-    const snap = await adminDb.collection("users").doc(decoded.uid).get();
+    const snap = await getAdminDb().collection("users").doc(decoded.uid).get();
     return snap.exists && snap.data()?.role === "admin";
   } catch {
     return false;
@@ -26,7 +26,8 @@ export async function GET(request: NextRequest) {
   if (!(await callerIsAdmin(request)))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const snap = await adminDb.collection("users").where("role", "==", "marketing").get();
+  const adminAuth = getAdminAuth();
+  const snap = await getAdminDb().collection("users").where("role", "==", "marketing").get();
   const users = await Promise.all(
     snap.docs.map(async (d) => {
       const data = d.data();
@@ -59,12 +60,12 @@ export async function POST(request: NextRequest) {
     );
   }
   try {
-    const rec = await adminAuth.createUser({
+    const rec = await getAdminAuth().createUser({
       email: String(email).trim().toLowerCase(),
       password: String(password),
       displayName: displayName ? String(displayName) : undefined,
     });
-    await adminDb.collection("users").doc(rec.uid).set({
+    await getAdminDb().collection("users").doc(rec.uid).set({
       uid: rec.uid,
       email: rec.email ?? String(email).trim().toLowerCase(),
       displayName: displayName ? String(displayName) : "",
@@ -98,7 +99,7 @@ export async function PATCH(request: NextRequest) {
   const { uid, password, disabled } = await request.json();
   if (!uid) return NextResponse.json({ error: "uid is required" }, { status: 400 });
 
-  const snap = await adminDb.collection("users").doc(uid).get();
+  const snap = await getAdminDb().collection("users").doc(uid).get();
   if (!snap.exists || snap.data()?.role !== "marketing")
     return NextResponse.json({ error: "Not a marketing user" }, { status: 404 });
 
@@ -108,7 +109,7 @@ export async function PATCH(request: NextRequest) {
   if (Object.keys(update).length === 0)
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
 
-  await adminAuth.updateUser(uid, update);
+  await getAdminAuth().updateUser(uid, update);
   return NextResponse.json({ ok: true });
 }
 
@@ -119,11 +120,11 @@ export async function DELETE(request: NextRequest) {
   const uid = request.nextUrl.searchParams.get("uid");
   if (!uid) return NextResponse.json({ error: "uid is required" }, { status: 400 });
 
-  const snap = await adminDb.collection("users").doc(uid).get();
+  const snap = await getAdminDb().collection("users").doc(uid).get();
   if (!snap.exists || snap.data()?.role !== "marketing")
     return NextResponse.json({ error: "Not a marketing user" }, { status: 404 });
 
-  await adminAuth.deleteUser(uid).catch(() => {});
-  await adminDb.collection("users").doc(uid).delete();
+  await getAdminAuth().deleteUser(uid).catch(() => {});
+  await getAdminDb().collection("users").doc(uid).delete();
   return NextResponse.json({ ok: true });
 }
