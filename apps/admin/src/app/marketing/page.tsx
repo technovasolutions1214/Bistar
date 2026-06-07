@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { collection, getDocs, query, where, limit } from "firebase/firestore";
 import { db } from "@novaflix/firebase-config";
 import { MarketingShell } from "@/components/marketing-shell";
+import { useAuth } from "@/lib/auth-context";
 import { Loader } from "@novaflix/ui";
 
 interface AttrRow {
@@ -43,10 +44,18 @@ function groupBy(rows: AttrRow[], keyFn: (r: AttrRow) => string | undefined) {
   }
   return [...m.entries()]
     .map(([k, v]) => ({ k, ...v }))
-    .sort((a, b) => b.revenue - a.revenue || b.count - a.count);
+    .sort((a, b) => b.count - a.count || b.revenue - a.revenue);
 }
 
-function Breakdown({ title, rows }: { title: string; rows: { k: string; count: number; revenue: number }[] }) {
+function Breakdown({
+  title,
+  rows,
+  showRevenue,
+}: {
+  title: string;
+  rows: { k: string; count: number; revenue: number }[];
+  showRevenue: boolean;
+}) {
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
       <h3 className="text-sm font-semibold mb-3">{title}</h3>
@@ -58,7 +67,7 @@ function Breakdown({ title, rows }: { title: string; rows: { k: string; count: n
             <tr className="text-xs text-[var(--muted)] text-left">
               <th className="font-medium pb-2">Source</th>
               <th className="font-medium pb-2 text-right">Purchases</th>
-              <th className="font-medium pb-2 text-right">Revenue</th>
+              {showRevenue && <th className="font-medium pb-2 text-right">Revenue</th>}
             </tr>
           </thead>
           <tbody>
@@ -66,7 +75,9 @@ function Breakdown({ title, rows }: { title: string; rows: { k: string; count: n
               <tr key={r.k} className="border-t border-[var(--border)]">
                 <td className="py-2 pr-2 truncate max-w-[220px]">{r.k}</td>
                 <td className="py-2 text-right tabular-nums">{r.count}</td>
-                <td className="py-2 text-right tabular-nums">₹{r.revenue.toLocaleString("en-IN")}</td>
+                {showRevenue && (
+                  <td className="py-2 text-right tabular-nums">₹{r.revenue.toLocaleString("en-IN")}</td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -77,6 +88,7 @@ function Breakdown({ title, rows }: { title: string; rows: { k: string; count: n
 }
 
 export default function MarketingOverviewPage() {
+  const { isAdmin } = useAuth();
   const [rows, setRows] = useState<AttrRow[]>([]);
   const [labels, setLabels] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -170,10 +182,10 @@ export default function MarketingOverviewPage() {
         <div className="py-16 flex justify-center"><Loader /></div>
       ) : (
         <div className="space-y-6">
-          {/* Summary */}
+          {/* Summary — Revenue card is admin-only */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Card label="Purchases" value={totals.count.toLocaleString("en-IN")} />
-            <Card label="Revenue" value={`₹${totals.revenue.toLocaleString("en-IN")}`} />
+            {isAdmin && <Card label="Revenue" value={`₹${totals.revenue.toLocaleString("en-IN")}`} />}
             <Card label="CAPI sent" value={totals.capi.sent.toLocaleString("en-IN")} />
             <Card
               label="CAPI issues"
@@ -182,17 +194,19 @@ export default function MarketingOverviewPage() {
             />
           </div>
 
-          {/* Breakdowns */}
+          {/* Breakdowns — Revenue column is admin-only */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Breakdown title="By pixel" rows={byPixel} />
-            <Breakdown title="By ad account" rows={byAccount} />
-            <Breakdown title="By campaign" rows={byCampaign} />
-            <Breakdown title="By country" rows={byCountry} />
+            <Breakdown title="By pixel" rows={byPixel} showRevenue={isAdmin} />
+            <Breakdown title="By ad account" rows={byAccount} showRevenue={isAdmin} />
+            <Breakdown title="By campaign" rows={byCampaign} showRevenue={isAdmin} />
+            <Breakdown title="By country" rows={byCountry} showRevenue={isAdmin} />
           </div>
 
           <p className="text-xs text-[var(--muted)]">
-            Conversions attributed from captured ad parameters. Ad spend / ROAS would require the Meta
-            Marketing API and isn&apos;t included here.
+            Conversions attributed from captured ad parameters.
+            {isAdmin
+              ? " Ad spend / ROAS would require the Meta Marketing API and isn't included here."
+              : " Revenue figures are visible to admins only."}
           </p>
         </div>
       )}
