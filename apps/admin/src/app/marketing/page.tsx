@@ -25,6 +25,17 @@ const RANGES = [
   { key: "all", label: "All time", days: 0 },
 ];
 
+// IST (Asia/Kolkata) calendar date, YYYY-MM-DD.
+const IST_FMT = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Kolkata",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+function istDate(ms: number): string {
+  return ms ? IST_FMT.format(new Date(ms)) : "(unknown)";
+}
+
 function tsToMs(ts: unknown): number {
   if (ts && typeof ts === "object") {
     const t = ts as { toDate?: () => Date; seconds?: number };
@@ -52,10 +63,14 @@ function Breakdown({
   title,
   rows,
   showRevenue,
+  firstCol = "Source",
+  max = 12,
 }: {
   title: string;
   rows: { k: string; count: number; revenue: number }[];
   showRevenue: boolean;
+  firstCol?: string;
+  max?: number;
 }) {
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
@@ -66,13 +81,13 @@ function Breakdown({
         <table className="w-full text-sm">
           <thead>
             <tr className="text-xs text-[var(--muted)] text-left">
-              <th className="font-medium pb-2">Source</th>
+              <th className="font-medium pb-2">{firstCol}</th>
               <th className="font-medium pb-2 text-right">Purchases</th>
               {showRevenue && <th className="font-medium pb-2 text-right">Revenue</th>}
             </tr>
           </thead>
           <tbody>
-            {rows.slice(0, 12).map((r) => (
+            {rows.slice(0, max).map((r) => (
               <tr key={r.k} className="border-t border-[var(--border)]">
                 <td className="py-2 pr-2 truncate max-w-[220px]">{r.k}</td>
                 <td className="py-2 text-right tabular-nums">{r.count}</td>
@@ -171,6 +186,21 @@ export default function MarketingOverviewPage() {
     return { count: filtered.length, revenue, capi };
   }, [filtered]);
 
+  // Date-wise (IST) — most recent day first.
+  const byDate = useMemo(() => {
+    const m = new Map<string, { count: number; revenue: number }>();
+    for (const r of filtered) {
+      const k = istDate(r.at);
+      const cur = m.get(k) || { count: 0, revenue: 0 };
+      cur.count++;
+      cur.revenue += r.value;
+      m.set(k, cur);
+    }
+    return [...m.entries()]
+      .map(([k, v]) => ({ k, ...v }))
+      .sort((a, b) => (a.k < b.k ? 1 : -1));
+  }, [filtered]);
+
   const byPixel = useMemo(
     () => groupBy(filtered, (r) => (r.pixelSlug ? labels[r.pixelSlug] || r.pixelSlug : undefined)),
     [filtered, labels]
@@ -214,7 +244,10 @@ export default function MarketingOverviewPage() {
             />
           </div>
 
-          {/* Breakdowns — Revenue column is admin-only */}
+          {/* Date-wise (IST) */}
+          <Breakdown title="By date (IST)" rows={byDate} showRevenue={isAdmin} firstCol="Date" max={31} />
+
+          {/* Source breakdowns — Revenue column is admin-only */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Breakdown title="By pixel" rows={byPixel} showRevenue={isAdmin} />
             <Breakdown title="By ad account" rows={byAccount} showRevenue={isAdmin} />
@@ -223,7 +256,7 @@ export default function MarketingOverviewPage() {
           </div>
 
           <p className="text-xs text-[var(--muted)]">
-            Conversions attributed from captured ad parameters.
+            Dates are IST calendar days. Conversions attributed from captured ad parameters.
             {isAdmin
               ? " Ad spend / ROAS would require the Meta Marketing API and isn't included here."
               : " Revenue figures are admin-only."}
