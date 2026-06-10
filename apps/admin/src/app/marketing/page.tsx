@@ -109,6 +109,7 @@ export default function MarketingOverviewPage() {
   const [labels, setLabels] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState("30");
+  const [pixelFilter, setPixelFilter] = useState(""); // "" = all pixels
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -167,12 +168,22 @@ export default function MarketingOverviewPage() {
     load();
   }, [load]);
 
+  // All configured pixels (for the selector), sorted by label.
+  const pixelOptions = useMemo(
+    () =>
+      Object.entries(labels)
+        .map(([slug, label]) => ({ slug, label }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [labels]
+  );
+
   const filtered = useMemo(() => {
     const days = RANGES.find((r) => r.key === range)?.days ?? 0;
-    if (!days) return rows;
-    const cutoff = Date.now() - days * 86400000;
-    return rows.filter((r) => r.at >= cutoff);
-  }, [rows, range]);
+    const cutoff = days ? Date.now() - days * 86400000 : 0;
+    return rows.filter(
+      (r) => (!days || r.at >= cutoff) && (!pixelFilter || r.pixelSlug === pixelFilter)
+    );
+  }, [rows, range, pixelFilter]);
 
   const totals = useMemo(() => {
     let revenue = 0;
@@ -209,23 +220,39 @@ export default function MarketingOverviewPage() {
   const byCampaign = useMemo(() => groupBy(filtered, (r) => r.campaignId), [filtered]);
   const byCountry = useMemo(() => groupBy(filtered, (r) => r.country), [filtered]);
 
+  const selectedPixelLabel = pixelFilter ? labels[pixelFilter] || pixelFilter : null;
+
   return (
     <MarketingShell>
-      {/* Range selector */}
-      <div className="flex items-center gap-1 mb-5">
-        {RANGES.map((r) => (
-          <button
-            key={r.key}
-            onClick={() => setRange(r.key)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              range === r.key
-                ? "bg-[var(--primary)] text-white"
-                : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--card)]"
-            }`}
-          >
-            {r.label}
-          </button>
-        ))}
+      {/* Controls: date range + pixel selector */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+        <div className="flex items-center gap-1">
+          {RANGES.map((r) => (
+            <button
+              key={r.key}
+              onClick={() => setRange(r.key)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                range === r.key
+                  ? "bg-[var(--primary)] text-white"
+                  : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--card)]"
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+        <select
+          value={pixelFilter}
+          onChange={(e) => setPixelFilter(e.target.value)}
+          className="bg-[var(--card)] border border-[var(--border)] text-sm rounded-lg px-3 py-1.5 max-w-[260px]"
+        >
+          <option value="">All pixels</option>
+          {pixelOptions.map((p) => (
+            <option key={p.slug} value={p.slug}>
+              {p.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       {loading ? (
@@ -244,19 +271,25 @@ export default function MarketingOverviewPage() {
             />
           </div>
 
-          {/* Date-wise (IST) */}
-          <Breakdown title="By date (IST)" rows={byDate} showRevenue={isAdmin} firstCol="Date" max={31} />
+          {/* Date-wise (IST) — scoped to the selected pixel when one is chosen */}
+          <Breakdown
+            title={selectedPixelLabel ? `By date (IST) — ${selectedPixelLabel}` : "By date (IST)"}
+            rows={byDate}
+            showRevenue={isAdmin}
+            firstCol="Date"
+            max={31}
+          />
 
           {/* Source breakdowns — Revenue column is admin-only */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Breakdown title="By pixel" rows={byPixel} showRevenue={isAdmin} />
+            {!pixelFilter && <Breakdown title="By pixel" rows={byPixel} showRevenue={isAdmin} />}
             <Breakdown title="By ad account" rows={byAccount} showRevenue={isAdmin} />
             <Breakdown title="By campaign" rows={byCampaign} showRevenue={isAdmin} />
             <Breakdown title="By country" rows={byCountry} showRevenue={isAdmin} />
           </div>
 
           <p className="text-xs text-[var(--muted)]">
-            Dates are IST calendar days. Conversions attributed from captured ad parameters.
+            {selectedPixelLabel ? `Showing ${selectedPixelLabel}. ` : ""}Dates are IST calendar days. Conversions attributed from captured ad parameters.
             {isAdmin
               ? " Ad spend / ROAS would require the Meta Marketing API and isn't included here."
               : " Revenue figures are admin-only."}
