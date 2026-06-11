@@ -19,5 +19,6 @@ env:
     value: "83875271443"
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
     value: "1:83875271443:web:190e388e4064ba6983c0e6"
-  - variable: FIREBASE_SERVICE_ACCOUNT
-    secret: FIREBASE_SERVICE_ACCOUNT
+  # No FIREBASE_SERVICE_ACCOUNT secret here: on App Hosting the Admin SDK
+  # uses Application Default Credentials from the compute service account
+  # (see apps/web/src/lib/firebase-admin.ts). The env var is only for local dev.
