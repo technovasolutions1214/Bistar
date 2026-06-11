@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy - NovaFlix",
-  description: "How NovaFlix collects, uses and protects your information.",
+  title: "Privacy Policy - Bistar",
+  description: "How Bistar collects, uses and protects your information.",
 };
 
 export default function PrivacyPage() {
@@ -18,7 +18,7 @@ export default function PrivacyPage() {
           <p>
             This Privacy Policy (&ldquo;Policy&rdquo;) describes how{" "}
             <strong>Technova Solutions</strong> (&ldquo;Technova&rdquo;, &ldquo;we&rdquo;,
-            &ldquo;us&rdquo;, or &ldquo;our&rdquo;), operator of the NovaFlix streaming service
+            &ldquo;us&rdquo;, or &ldquo;our&rdquo;), operator of the Bistar streaming service
             (the &ldquo;Service&rdquo;), collects, uses, discloses, retains and protects
             information that relates to you when you access or use the Service. By using the
             Service you consent to the practices described in this Policy. This Policy is
@@ -221,17 +221,17 @@ export default function PrivacyPage() {
           </p>
           <div className="mt-3 p-4 bg-[var(--card)] rounded border border-[var(--border)]">
             <p><strong>Technova Solutions</strong></p>
-            <p>Attn: Grievance Officer &mdash; NovaFlix</p>
+            <p>Attn: Grievance Officer &mdash; Bistar</p>
             <p>
               Email:{" "}
-              <a href="mailto:grievance@novaflix.app" className="text-[var(--primary)] hover:underline">
-                grievance@novaflix.app
+              <a href="mailto:grievance@bistar.app" className="text-[var(--primary)] hover:underline">
+                grievance@bistar.app
               </a>
             </p>
             <p>
               Support:{" "}
-              <a href="mailto:support@novaflix.app" className="text-[var(--primary)] hover:underline">
-                support@novaflix.app
+              <a href="mailto:support@bistar.app" className="text-[var(--primary)] hover:underline">
+                support@bistar.app
               </a>
             </p>
           </div>

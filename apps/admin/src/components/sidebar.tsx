@@ -124,7 +124,7 @@ export function Sidebar() {
             </svg>
           </div>
           <div>
-            <span className="text-lg font-bold text-white">NovaFlix</span>
+            <span className="text-lg font-bold text-white">Bistar</span>
             <span className="ml-1 text-xs font-medium text-[var(--muted)]">Admin</span>
           </div>
         </div>

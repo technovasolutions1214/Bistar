@@ -2,10 +2,10 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { collection, getDocs, query, orderBy } from "firebase/firestore";
-import { db } from "@novaflix/firebase-config";
+import { db } from "@bistar/firebase-config";
 import { AdminLayout } from "@/components/admin-layout";
-import { Input, Loader, Button } from "@novaflix/ui";
-import type { User } from "@novaflix/shared";
+import { Input, Loader, Button } from "@bistar/ui";
+import type { User } from "@bistar/shared";
 
 const ITEMS_PER_PAGE = 15;
 

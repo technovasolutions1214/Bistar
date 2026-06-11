@@ -3,10 +3,10 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { db, storage } from "@novaflix/firebase-config";
+import { db, storage } from "@bistar/firebase-config";
 import { AdminLayout } from "@/components/admin-layout";
-import { Button, Input, useToast } from "@novaflix/ui";
-import { GENRES } from "@novaflix/shared";
+import { Button, Input, useToast } from "@bistar/ui";
+import { GENRES } from "@bistar/shared";
 
 export default function NewContentPage() {
   const router = useRouter();

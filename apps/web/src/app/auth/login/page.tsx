@@ -9,8 +9,8 @@ import {
   signInWithCustomToken,
 } from "firebase/auth";
 import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
-import { auth, db } from "@novaflix/firebase-config";
-import { Button, Input } from "@novaflix/ui";
+import { auth, db } from "@bistar/firebase-config";
+import { Button, Input } from "@bistar/ui";
 import { useAuth } from "@/lib/auth-context";
 import { track } from "@/lib/pixel";
 
@@ -274,7 +274,7 @@ export default function LoginPage() {
     <div className="w-full max-w-md bg-[var(--card)] border border-[var(--border)] rounded-2xl p-8">
       <div className="text-center mb-8">
         <h1 className="text-2xl font-bold text-[var(--primary)] mb-1 lg:hidden">
-          NovaFlix
+          Bistar
         </h1>
         <h2 className="text-xl font-semibold mb-1 hidden lg:block">Welcome Back</h2>
         <p className="text-sm text-[var(--muted)]">Sign in to start streaming</p>
@@ -405,7 +405,7 @@ export default function LoginPage() {
           <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-[var(--primary)]/20 rounded-full blur-[100px]" />
           <div className="absolute bottom-1/3 right-1/4 w-48 h-48 bg-[var(--primary)]/10 rounded-full blur-[80px]" />
           <div className="relative z-10 text-center px-12">
-            <h1 className="text-5xl font-bold text-[var(--primary)] mb-4">NovaFlix</h1>
+            <h1 className="text-5xl font-bold text-[var(--primary)] mb-4">Bistar</h1>
             <p className="text-xl text-[var(--foreground)]/80 font-medium mb-2">
               Stream unlimited movies &amp; series
             </p>

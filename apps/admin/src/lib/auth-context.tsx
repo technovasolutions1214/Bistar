@@ -6,8 +6,8 @@ import {
   type User as FirebaseUser,
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "@novaflix/firebase-config";
-import type { User } from "@novaflix/shared";
+import { auth, db } from "@bistar/firebase-config";
+import type { User } from "@bistar/shared";
 
 interface AuthContextType {
   firebaseUser: FirebaseUser | null;

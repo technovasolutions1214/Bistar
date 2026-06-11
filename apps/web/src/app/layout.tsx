@@ -6,8 +6,8 @@ import { Footer } from "@/components/footer";
 import { PixelLoader } from "@/components/pixel-loader";
 
 export const metadata: Metadata = {
-  title: "NovaFlix - Stream Movies & Series",
-  description: "Watch the latest movies and web series on NovaFlix",
+  title: "Bistar - Stream Movies & Series",
+  description: "Watch the latest movies and web series on Bistar",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

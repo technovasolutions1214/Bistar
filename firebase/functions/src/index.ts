@@ -1,5 +1,5 @@
 /**
- * NovaFlix Cloud Functions
+ * Bistar Cloud Functions
  *
  * Entry point that re-exports every function module.
  * Firebase discovers and deploys each named export as a Cloud Function.

@@ -2,10 +2,10 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { collection, query, orderBy, limit, getDocs } from "firebase/firestore";
-import { db } from "@novaflix/firebase-config";
+import { db } from "@bistar/firebase-config";
 import { AdminLayout } from "@/components/admin-layout";
-import { Card, Button, Loader } from "@novaflix/ui";
-import type { User } from "@novaflix/shared";
+import { Card, Button, Loader } from "@bistar/ui";
+import type { User } from "@bistar/shared";
 
 interface DashboardStats {
   totalUsers: number;
@@ -159,7 +159,7 @@ export default function DashboardPage() {
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-          <p className="text-[var(--muted)] mt-1">Overview of your NovaFlix platform</p>
+          <p className="text-[var(--muted)] mt-1">Overview of your Bistar platform</p>
         </div>
 
         {loading ? (

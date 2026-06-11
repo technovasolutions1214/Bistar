@@ -3,7 +3,7 @@ import React, { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/sidebar";
-import { Loader } from "@novaflix/ui";
+import { Loader } from "@bistar/ui";
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
   const { firebaseUser, userData, loading, isAdmin, isMarketing } = useAuth();

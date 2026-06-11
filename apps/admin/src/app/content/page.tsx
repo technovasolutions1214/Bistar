@@ -10,10 +10,10 @@ import {
   query,
   orderBy,
 } from "firebase/firestore";
-import { db } from "@novaflix/firebase-config";
+import { db } from "@bistar/firebase-config";
 import { AdminLayout } from "@/components/admin-layout";
-import { Button, Input, Loader, Modal, useToast } from "@novaflix/ui";
-import type { Content } from "@novaflix/shared";
+import { Button, Input, Loader, Modal, useToast } from "@bistar/ui";
+import type { Content } from "@bistar/shared";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -87,14 +87,24 @@ export default function ContentListPage() {
               Manage movies and series on your platform
             </p>
           </div>
-          <Link href="/content/new">
-            <Button>
-              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-              Add New Content
-            </Button>
-          </Link>
+          <div className="flex gap-3">
+            <Link href="/content/bulk">
+              <Button variant="secondary">
+                <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                </svg>
+                Bulk Upload
+              </Button>
+            </Link>
+            <Link href="/content/new">
+              <Button>
+                <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                Add New Content
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {/* Filters */}

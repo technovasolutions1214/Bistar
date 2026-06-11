@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signInAnonymously } from "firebase/auth";
-import { auth } from "@novaflix/firebase-config";
-import { Button, Input } from "@novaflix/ui";
-import type { Plan } from "@novaflix/shared";
+import { auth } from "@bistar/firebase-config";
+import { Button, Input } from "@bistar/ui";
+import type { Plan } from "@bistar/shared";
 import { useAuth } from "@/lib/auth-context";
 import { track } from "@/lib/pixel";
 import { getAttribution } from "@/lib/attribution";

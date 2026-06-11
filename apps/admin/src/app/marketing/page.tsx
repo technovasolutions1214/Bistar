@@ -1,10 +1,10 @@
 "use client";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { collection, getDocs, query, where, limit } from "firebase/firestore";
-import { db } from "@novaflix/firebase-config";
+import { db } from "@bistar/firebase-config";
 import { MarketingShell } from "@/components/marketing-shell";
 import { useAuth } from "@/lib/auth-context";
-import { Loader } from "@novaflix/ui";
+import { Loader } from "@bistar/ui";
 
 interface AttrRow {
   txnid: string;

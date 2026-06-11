@@ -100,7 +100,7 @@ export const onVideoUploaded = onObjectFinalized(
     const videoId = match[2];
     const fileName = match[3];
 
-    const tempDir = path.join(os.tmpdir(), `novaflix-${contentId}-${videoId}`);
+    const tempDir = path.join(os.tmpdir(), `bistar-${contentId}-${videoId}`);
     fs.mkdirSync(tempDir, { recursive: true });
 
     const localInput = path.join(tempDir, fileName);
@@ -134,7 +134,7 @@ export const onVideoUploaded = onObjectFinalized(
         await uploadDirectory(qualityDir, `${destPrefix}/${preset.name}`);
       }
 
-      const cdnDomain = process.env.CDN_DOMAIN || "cdn.novaflix.app";
+      const cdnDomain = process.env.CDN_DOMAIN || "cdn.bistar.app";
       const videoUrl = `https://${cdnDomain}/${destPrefix}/master.m3u8`;
 
       await videoDocRef.set(

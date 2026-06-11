@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Refund Policy - NovaFlix",
-  description: "Refund Policy for subscriptions and purchases on NovaFlix.",
+  title: "Refund Policy - Bistar",
+  description: "Refund Policy for subscriptions and purchases on Bistar.",
 };
 
 export default function RefundPage() {
@@ -17,10 +17,10 @@ export default function RefundPage() {
         <section>
           <p>
             This Refund &amp; Cancellation Policy (&ldquo;Policy&rdquo;) applies to all
-            subscriptions, Plans, day-packs and any other paid purchases made on NovaFlix, a
+            subscriptions, Plans, day-packs and any other paid purchases made on Bistar, a
             streaming service operated by <strong>Technova Solutions</strong>
             (&ldquo;Technova&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo; or &ldquo;our&rdquo;). By
-            completing a purchase on NovaFlix, you expressly acknowledge and agree to the terms
+            completing a purchase on Bistar, you expressly acknowledge and agree to the terms
             of this Policy. This Policy forms part of, and must be read together with, our Terms
             of Use.
           </p>
@@ -81,7 +81,7 @@ export default function RefundPage() {
             the same minute), you may write to us within seven (7) days of the transaction with
             full transaction details. Upon our investigation and sole determination that the
             charge was erroneous, we may, at our absolute discretion, issue a credit to your
-            NovaFlix account (not a monetary refund) of an equivalent value. We are not obliged
+            Bistar account (not a monetary refund) of an equivalent value. We are not obliged
             to issue any credit and no monetary refund will be made.
           </p>
         </section>
@@ -139,8 +139,8 @@ export default function RefundPage() {
           <h2 className="text-xl font-semibold mb-3">9. How to Contact Us</h2>
           <p>
             For questions about this Policy or any payment matter, please email us at{" "}
-            <a href="mailto:support@novaflix.app" className="text-[var(--primary)] hover:underline">
-              support@novaflix.app
+            <a href="mailto:support@bistar.app" className="text-[var(--primary)] hover:underline">
+              support@bistar.app
             </a>
             . Please include your registered mobile number / email and the transaction
             reference. We will respond within a reasonable time, but a response does not imply

@@ -43,7 +43,7 @@ export function Navbar() {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-8">
               <Link href="/" className="text-2xl font-bold text-[var(--primary)]">
-                NovaFlix
+                Bistar
               </Link>
               <div className="hidden md:flex items-center gap-6">
                 <Link href="/" className="text-sm text-[var(--muted)] hover:text-white transition-colors">
@@ -140,7 +140,7 @@ export function Navbar() {
         }`}
       >
         <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
-          <span className="text-lg font-bold text-[var(--primary)]">NovaFlix</span>
+          <span className="text-lg font-bold text-[var(--primary)]">Bistar</span>
           <button
             onClick={() => setMobileOpen(false)}
             className="w-10 h-10 flex items-center justify-center text-[var(--muted)] hover:text-white"

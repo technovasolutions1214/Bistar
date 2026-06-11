@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { collection, query, where, orderBy, getDocs, limit } from "firebase/firestore";
-import { db } from "@novaflix/firebase-config";
-import { Loader } from "@novaflix/ui";
+import { db } from "@bistar/firebase-config";
+import { Loader } from "@bistar/ui";
 import { useAuth } from "@/lib/auth-context";
 
 interface Transaction {

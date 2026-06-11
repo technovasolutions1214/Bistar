@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { collection, getDocs, doc, getDoc } from "firebase/firestore";
-import { db } from "@novaflix/firebase-config";
+import { db } from "@bistar/firebase-config";
 import { captureAttribution, getAttribution } from "@/lib/attribution";
 
 // Loads the right Meta Pixel and fires PageView on every route change.

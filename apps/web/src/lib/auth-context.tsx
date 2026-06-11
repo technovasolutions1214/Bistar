@@ -2,8 +2,8 @@
 import React, { createContext, useContext, useEffect, useState, useMemo } from "react";
 import { onAuthStateChanged, signOut as firebaseSignOut, type User as FirebaseUser } from "firebase/auth";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
-import { auth, db } from "@novaflix/firebase-config";
-import type { User } from "@novaflix/shared";
+import { auth, db } from "@bistar/firebase-config";
+import type { User } from "@bistar/shared";
 
 interface AuthContextType {
   firebaseUser: FirebaseUser | null;
@@ -78,9 +78,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (firebaseUser?.isAnonymous) return false;
     if (!userData?.subscription) return false;
     if (userData.subscription.status !== "active") return false;
+    // endDate is a Firestore Timestamp in practice, but tolerate serialized
+    // string/number values from older writes.
+    const end = userData.subscription.endDate;
     const endDate =
-      (userData.subscription.endDate as any)?.toDate?.() ??
-      new Date(userData.subscription.endDate as any);
+      typeof end?.toDate === "function"
+        ? end.toDate()
+        : new Date(end as unknown as string | number);
     return endDate > new Date();
   }, [userData, firebaseUser]);
 

@@ -13,10 +13,10 @@ import {
   deleteField,
 } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { db, storage } from "@novaflix/firebase-config";
+import { db, storage } from "@bistar/firebase-config";
 import { AdminLayout } from "@/components/admin-layout";
 import { useAuth } from "@/lib/auth-context";
-import { Button, Input, Loader, Modal, useToast } from "@novaflix/ui";
+import { Button, Input, Loader, Modal, useToast } from "@bistar/ui";
 
 interface AdminUser {
   uid: string;
@@ -387,7 +387,7 @@ export default function SettingsPage() {
               placeholder="cinestrydays-1415221612924"
             />
             <p className="text-xs text-[var(--muted)] mt-1">
-              Identifies this app on the payment gateway. Default is the NovaFlix code.
+              Identifies this app on the payment gateway. Default is the Bistar code.
             </p>
           </div>
 
@@ -419,7 +419,7 @@ export default function SettingsPage() {
             <Input
               value={siteName}
               onChange={(e) => setSiteName(e.target.value)}
-              placeholder="NovaFlix"
+              placeholder="Bistar"
             />
           </div>
 

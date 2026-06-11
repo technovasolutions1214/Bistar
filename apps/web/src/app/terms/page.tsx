@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Terms of Use - NovaFlix",
-  description: "Terms of Use governing your access to and use of NovaFlix.",
+  title: "Terms of Use - Bistar",
+  description: "Terms of Use governing your access to and use of Bistar.",
 };
 
 export default function TermsPage() {
@@ -19,7 +19,7 @@ export default function TermsPage() {
             These Terms of Use (&ldquo;Terms&rdquo;) form a legally binding agreement between
             you (&ldquo;you&rdquo;, &ldquo;user&rdquo; or &ldquo;subscriber&rdquo;) and{" "}
             <strong>Technova Solutions</strong> (&ldquo;Technova&rdquo;, &ldquo;Company&rdquo;,
-            &ldquo;we&rdquo;, &ldquo;us&rdquo; or &ldquo;our&rdquo;), the operator of the NovaFlix
+            &ldquo;we&rdquo;, &ldquo;us&rdquo; or &ldquo;our&rdquo;), the operator of the Bistar
             streaming service, website, applications and related properties (collectively, the
             &ldquo;Service&rdquo;). By accessing, browsing, registering for, subscribing to or
             otherwise using the Service in any manner, you acknowledge that you have read,
@@ -270,8 +270,8 @@ export default function TermsPage() {
           <h2 className="text-xl font-semibold mb-3">18. Contact</h2>
           <p>
             For any queries relating to these Terms, please write to us at{" "}
-            <a href="mailto:support@novaflix.app" className="text-[var(--primary)] hover:underline">
-              support@novaflix.app
+            <a href="mailto:support@bistar.app" className="text-[var(--primary)] hover:underline">
+              support@bistar.app
             </a>
             .
           </p>

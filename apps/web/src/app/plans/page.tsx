@@ -9,13 +9,13 @@ import {
   orderBy,
   getDocs,
 } from "firebase/firestore";
-import { db } from "@novaflix/firebase-config";
-import { Loader } from "@novaflix/ui";
+import { db } from "@bistar/firebase-config";
+import { Loader } from "@bistar/ui";
 import { useAuth } from "@/lib/auth-context";
 import { track } from "@/lib/pixel";
 import { PaymentModal } from "@/components/payment-modal";
 
-import type { Plan } from "@novaflix/shared";
+import type { Plan } from "@bistar/shared";
 
 export default function PlansPage() {
   const router = useRouter();

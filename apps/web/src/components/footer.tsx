@@ -9,7 +9,7 @@ export function Footer() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
           {/* Brand */}
           <div>
-            <h3 className="text-xl font-bold text-[var(--primary)] mb-3">NovaFlix</h3>
+            <h3 className="text-xl font-bold text-[var(--primary)] mb-3">Bistar</h3>
             <p className="text-sm text-[var(--muted)] leading-relaxed max-w-xs">
               Stream the latest movies, web series, and exclusive content anytime, anywhere on any device.
             </p>
@@ -67,7 +67,7 @@ export function Footer() {
         {/* Bottom Bar */}
         <div className="mt-10 pt-6 border-t border-[var(--border)] text-center">
           <p className="text-xs text-[var(--muted)]">
-            &copy; {new Date().getFullYear()} NovaFlix. All rights reserved.
+            &copy; {new Date().getFullYear()} Bistar. All rights reserved.
           </p>
         </div>
       </div>

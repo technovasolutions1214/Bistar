@@ -14,9 +14,9 @@ import {
   type DocumentData,
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
-import { db } from "@novaflix/firebase-config";
-import { Skeleton } from "@novaflix/ui";
-import type { Content } from "@novaflix/shared";
+import { db } from "@bistar/firebase-config";
+import { Skeleton } from "@bistar/ui";
+import type { Content } from "@bistar/shared";
 
 const PAGE_SIZE = 12;
 

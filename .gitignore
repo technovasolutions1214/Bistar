@@ -58,7 +58,7 @@ coverage/
 *.env.local
 *-env-local.txt
 /tmp/
-novaflix-sa.json
+bistar-sa.json
 # Cloudflare Worker build artifacts
 cloudflare/*/node_modules/
 cloudflare/*/.wrangler/

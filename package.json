@@ -1,17 +1,17 @@
 {
-  "name": "novaflix",
+  "name": "bistar",
   "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
     "lint": "turbo lint",
-    "dev:web": "turbo dev --filter=@novaflix/web",
-    "dev:admin": "turbo dev --filter=@novaflix/admin",
-    "build:web": "turbo build --filter=@novaflix/web",
-    "build:admin": "turbo build --filter=@novaflix/admin",
-    "start:web": "turbo start --filter=@novaflix/web",
-    "start:admin": "turbo start --filter=@novaflix/admin"
+    "dev:web": "turbo dev --filter=@bistar/web",
+    "dev:admin": "turbo dev --filter=@bistar/admin",
+    "build:web": "turbo build --filter=@bistar/web",
+    "build:admin": "turbo build --filter=@bistar/admin",
+    "start:web": "turbo start --filter=@bistar/web",
+    "start:admin": "turbo start --filter=@bistar/admin"
   },
   "devDependencies": {
     "turbo": "^2"

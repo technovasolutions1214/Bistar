@@ -15,10 +15,10 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { db, storage } from "@novaflix/firebase-config";
+import { db, storage } from "@bistar/firebase-config";
 import { AdminLayout } from "@/components/admin-layout";
-import { Button, Input, Loader, Modal, useToast } from "@novaflix/ui";
-import { GENRES, type Content, type Video } from "@novaflix/shared";
+import { Button, Input, Loader, Modal, useToast } from "@bistar/ui";
+import { GENRES, type Content, type Video } from "@bistar/shared";
 
 export default function EditContentPage() {
   const router = useRouter();

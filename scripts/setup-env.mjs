@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * NovaFlix Firebase Setup Script
+ * Bistar Firebase Setup Script
  *
  * Usage:
  *   node scripts/setup-env.mjs <path-to-service-account.json>
@@ -21,7 +21,7 @@ const rl = createInterface({ input: process.stdin, output: process.stdout });
 const ask = (q) => new Promise((res) => rl.question(q, res));
 
 async function main() {
-  console.log("\n🎬 \x1b[1m\x1b[31mNovaFlix\x1b[0m Firebase Setup\n");
+  console.log("\n🎬 \x1b[1m\x1b[31mBistar\x1b[0m Firebase Setup\n");
 
   // Step 1: Service Account
   let saJSON = "";

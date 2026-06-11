@@ -12,11 +12,11 @@ import {
   orderBy,
   getDocs,
 } from "firebase/firestore";
-import { db } from "@novaflix/firebase-config";
-import { Loader, Button } from "@novaflix/ui";
+import { db } from "@bistar/firebase-config";
+import { Loader, Button } from "@bistar/ui";
 import { useAuth } from "@/lib/auth-context";
 import { track } from "@/lib/pixel";
-import type { Content, Video } from "@novaflix/shared";
+import type { Content, Video } from "@bistar/shared";
 
 interface GeneralSettings {
   requireSubscriptionToBrowse?: boolean;

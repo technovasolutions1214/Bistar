@@ -12,10 +12,10 @@ import {
   serverTimestamp,
   writeBatch,
 } from "firebase/firestore";
-import { db } from "@novaflix/firebase-config";
+import { db } from "@bistar/firebase-config";
 import { AdminLayout } from "@/components/admin-layout";
-import { Button, Input, Loader, Modal, useToast } from "@novaflix/ui";
-import type { Plan } from "@novaflix/shared";
+import { Button, Input, Loader, Modal, useToast } from "@bistar/ui";
+import type { Plan } from "@bistar/shared";
 
 interface PlanForm {
   name: string;

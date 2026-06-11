@@ -1,11 +1,11 @@
-// CDN proxy for NovaFlix video assets.
+// CDN proxy for Bistar video assets.
 //
-// Fronts gs://novaflix-584d4.firebasestorage.app so the browser sees
-// https://cdn.novaflix.app/<path> and the HLS segments cache at the edge.
+// Fronts gs://bistar-app.firebasestorage.app so the browser sees
+// https://cdn.bistar.app/<path> and the HLS segments cache at the edge.
 // Master.m3u8 references relative child playlists and .ts segments, so all of
 // them resolve under this same hostname — no manifest rewriting needed.
 
-const BUCKET = "novaflix-584d4.firebasestorage.app";
+const BUCKET = "bistar-app.firebasestorage.app";
 const ORIGIN = `https://storage.googleapis.com/${BUCKET}`;
 
 const SEGMENT_CACHE_TTL = 31536000; // 1 year for immutable .ts segments

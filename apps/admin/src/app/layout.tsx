@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
-import { ToastProvider } from "@novaflix/ui";
+import { ToastProvider } from "@bistar/ui";
 
 export const metadata: Metadata = {
-  title: "NovaFlix Admin Dashboard",
-  description: "Admin dashboard for managing NovaFlix content and users",
+  title: "Bistar Admin Dashboard",
+  description: "Admin dashboard for managing Bistar content and users",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -1,12 +1,12 @@
-name = "novaflix-cdn"
+name = "bistar-cdn"
 main = "src/index.js"
 compatibility_date = "2025-10-01"
 account_id = "f44982e6372916cf261afa2667513c60"
 
-# Bind cdn.novaflix.app to this Worker. The DNS record is managed by wrangler
+# Bind cdn.bistar.app to this Worker. The DNS record is managed by wrangler
 # on first deploy (set custom_domain = true).
 routes = [
-  { pattern = "cdn.novaflix.app", custom_domain = true }
+  { pattern = "cdn.bistar.app", custom_domain = true }
 ]
 
 [observability]

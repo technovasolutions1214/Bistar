@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import type { Content } from "@novaflix/shared";
+import type { Content } from "@bistar/shared";
 
 interface ContentCarouselProps {
   title: string;

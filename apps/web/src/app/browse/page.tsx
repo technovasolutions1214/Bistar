@@ -12,9 +12,9 @@ import {
   doc,
   getDoc,
 } from "firebase/firestore";
-import { db } from "@novaflix/firebase-config";
-import { Input, Skeleton } from "@novaflix/ui";
-import { GENRES, type Content } from "@novaflix/shared";
+import { db } from "@bistar/firebase-config";
+import { Input, Skeleton } from "@bistar/ui";
+import { GENRES, type Content } from "@bistar/shared";
 import { SubscriptionGate } from "@/components/subscription-gate";
 import { track } from "@/lib/pixel";
 

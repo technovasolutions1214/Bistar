@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@novaflix/shared", "@novaflix/firebase-config", "@novaflix/ui"],
+  transpilePackages: ["@bistar/shared", "@bistar/firebase-config", "@bistar/ui"],
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "firebasestorage.googleapis.com" },

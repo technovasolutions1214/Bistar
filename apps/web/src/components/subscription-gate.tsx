@@ -51,8 +51,8 @@ export function SubscriptionGate({ requireGate, children, fallback }: Subscripti
 
         {/* Logo */}
         <div className="mb-4">
-          <span className="text-3xl font-bold tracking-tight">
-            Nova<span className="text-[var(--primary)]">Flix</span>
+          <span className="text-3xl font-bold tracking-tight text-[var(--primary)]">
+            Bistar
           </span>
         </div>
 
@@ -61,7 +61,7 @@ export function SubscriptionGate({ requireGate, children, fallback }: Subscripti
         </h2>
         <p className="text-[var(--muted)] mb-8 text-sm sm:text-base leading-relaxed">
           Get unlimited access to all movies, web series, and exclusive content
-          with a NovaFlix subscription plan.
+          with a Bistar subscription plan.
         </p>
 
         <div className="flex flex-col items-center gap-3">

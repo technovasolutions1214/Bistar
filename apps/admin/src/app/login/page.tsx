@@ -8,9 +8,9 @@ import {
   signOut,
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "@novaflix/firebase-config";
+import { auth, db } from "@bistar/firebase-config";
 import { useAuth } from "@/lib/auth-context";
-import { Button, Input } from "@novaflix/ui";
+import { Button, Input } from "@bistar/ui";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -97,7 +97,7 @@ export default function LoginPage() {
               <path d="M8 5v14l11-7z" />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-white">NovaFlix</h1>
+          <h1 className="text-3xl font-bold text-white">Bistar</h1>
           <p className="text-[var(--primary)] text-sm font-medium mt-1">Dashboard</p>
         </div>
 

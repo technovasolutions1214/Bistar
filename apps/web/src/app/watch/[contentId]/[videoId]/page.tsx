@@ -11,10 +11,10 @@ import {
   orderBy,
   getDocs,
 } from "firebase/firestore";
-import { db } from "@novaflix/firebase-config";
-import { Loader } from "@novaflix/ui";
+import { db } from "@bistar/firebase-config";
+import { Loader } from "@bistar/ui";
 import { useAuth } from "@/lib/auth-context";
-import type { Content, Video } from "@novaflix/shared";
+import type { Content, Video } from "@bistar/shared";
 
 export default function WatchPage() {
   const params = useParams<{ contentId: string; videoId: string }>();

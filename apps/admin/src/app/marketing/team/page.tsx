@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { MarketingShell } from "@/components/marketing-shell";
 import { useAuth } from "@/lib/auth-context";
-import { Button, Input, Loader, useToast } from "@novaflix/ui";
+import { Button, Input, Loader, useToast } from "@bistar/ui";
 
 interface MktUser {
   uid: string;

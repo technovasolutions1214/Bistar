@@ -2,10 +2,10 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { doc, getDoc, updateDoc, collection, getDocs, query, where, orderBy, serverTimestamp, Timestamp } from "firebase/firestore";
-import { db } from "@novaflix/firebase-config";
+import { db } from "@bistar/firebase-config";
 import { AdminLayout } from "@/components/admin-layout";
-import { Button, Loader, Modal, useToast } from "@novaflix/ui";
-import type { User, Plan } from "@novaflix/shared";
+import { Button, Loader, Modal, useToast } from "@bistar/ui";
+import type { User, Plan } from "@bistar/shared";
 
 export default function UserDetailPage() {
   const router = useRouter();

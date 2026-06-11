@@ -1,9 +1,9 @@
 "use client";
 import React, { useCallback, useEffect, useState } from "react";
 import { collection, getDocs, doc, setDoc, deleteDoc } from "firebase/firestore";
-import { db } from "@novaflix/firebase-config";
+import { db } from "@bistar/firebase-config";
 import { MarketingShell } from "@/components/marketing-shell";
-import { Button, Input, Loader, useToast } from "@novaflix/ui";
+import { Button, Input, Loader, useToast } from "@bistar/ui";
 
 interface AdAccount {
   id: string;

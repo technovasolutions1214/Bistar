@@ -9,10 +9,10 @@ import {
   Timestamp,
   getCountFromServer,
 } from "firebase/firestore";
-import { db } from "@novaflix/firebase-config";
+import { db } from "@bistar/firebase-config";
 import { AdminLayout } from "@/components/admin-layout";
-import { Button, Loader } from "@novaflix/ui";
-import type { AnalyticsEntry } from "@novaflix/shared";
+import { Button, Loader } from "@bistar/ui";
+import type { AnalyticsEntry } from "@bistar/shared";
 
 type DateRange = "7d" | "30d" | "custom";
 
@@ -231,7 +231,7 @@ export default function AnalyticsPage() {
           </div>
           <p className="text-xs text-[var(--muted)]">
             Today and yesterday counts are queried live from Firestore and reflect the IST calendar day. They do not depend on the nightly
-            aggregator. Revenue counts only transactions with <code>status: "success"</code>.
+            aggregator. Revenue counts only transactions with <code>status: &quot;success&quot;</code>.
           </p>
         </div>
 

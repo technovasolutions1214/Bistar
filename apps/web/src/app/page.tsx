@@ -13,9 +13,9 @@ import {
   doc,
   getDoc,
 } from "firebase/firestore";
-import { db } from "@novaflix/firebase-config";
-import { Skeleton } from "@novaflix/ui";
-import type { Content, SiteSettings } from "@novaflix/shared";
+import { db } from "@bistar/firebase-config";
+import { Skeleton } from "@bistar/ui";
+import type { Content, SiteSettings } from "@bistar/shared";
 import { ContentCarousel } from "@/components/content-carousel";
 import { SeriesInfiniteGrid } from "@/components/series-infinite-grid";
 import { SubscriptionGate } from "@/components/subscription-gate";

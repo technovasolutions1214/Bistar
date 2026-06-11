@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { collection, query, where, limit, getDocs } from "firebase/firestore";
-import { db } from "@novaflix/firebase-config";
+import { db } from "@bistar/firebase-config";
 import { useAuth } from "@/lib/auth-context";
 
 /**
@@ -60,15 +60,15 @@ export function LandingHero() {
         {/* Centered subscribe CTA */}
         <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
           <div className="mb-4">
-            <span className="text-4xl sm:text-5xl font-bold tracking-tight">
-              Nova<span className="text-[var(--primary)]">Flix</span>
+            <span className="text-4xl sm:text-5xl font-bold tracking-tight text-[var(--primary)]">
+              Bistar
             </span>
           </div>
           <h1 className="text-3xl sm:text-5xl font-bold mb-3 max-w-3xl text-shadow">
             Subscribe to unlock content
           </h1>
           <p className="text-[var(--muted)] text-base sm:text-lg mb-8 max-w-xl">
-            Get unlimited access to all movies, web series, and exclusive content with a NovaFlix
+            Get unlimited access to all movies, web series, and exclusive content with a Bistar
             subscription plan.
           </p>
           <Link
