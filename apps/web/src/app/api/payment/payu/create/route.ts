@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
     }
 
     // --- 6. Build PayU payload ------------------------------------------
-    const txnid = `NF-${Date.now()}-${userId.slice(0, 8)}`;
+    const txnid = `BS-${Date.now()}-${userId.slice(0, 8)}`;
     const amount = String(plan.price);
     const firstname = userId; // PayU's firstname field is used as our userId (matches cinestry template)
     const email = decodedToken.email || userData.email || "contact@cinestry.com";
