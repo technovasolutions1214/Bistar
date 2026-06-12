@@ -9,7 +9,7 @@ export function Footer() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
           {/* Brand */}
           <div>
-            <h3 className="text-xl font-bold text-[var(--primary)] mb-3">Bistar</h3>
+            <h3 className="text-xl font-bold text-gold mb-3">Bistar</h3>
             <p className="text-sm text-[var(--muted)] leading-relaxed max-w-xs">
               Stream the latest movies, web series, and exclusive content anytime, anywhere on any device.
             </p>
@@ -22,17 +22,17 @@ export function Footer() {
             </h4>
             <ul className="space-y-2">
               <li>
-                <Link href="/" className="text-sm text-[var(--muted)] hover:text-white transition-colors">
+                <Link href="/" className="text-sm text-[var(--muted)] hover:text-[var(--gold-2)] transition-colors">
                   Home
                 </Link>
               </li>
               <li>
-                <Link href="/browse" className="text-sm text-[var(--muted)] hover:text-white transition-colors">
+                <Link href="/browse" className="text-sm text-[var(--muted)] hover:text-[var(--gold-2)] transition-colors">
                   Browse
                 </Link>
               </li>
               <li>
-                <Link href="/plans" className="text-sm text-[var(--muted)] hover:text-white transition-colors">
+                <Link href="/plans" className="text-sm text-[var(--muted)] hover:text-[var(--gold-2)] transition-colors">
                   Plans
                 </Link>
               </li>
@@ -46,17 +46,17 @@ export function Footer() {
             </h4>
             <ul className="space-y-2">
               <li>
-                <Link href="/terms" className="text-sm text-[var(--muted)] hover:text-white transition-colors">
+                <Link href="/terms" className="text-sm text-[var(--muted)] hover:text-[var(--gold-2)] transition-colors">
                   Terms of Use
                 </Link>
               </li>
               <li>
-                <Link href="/privacy" className="text-sm text-[var(--muted)] hover:text-white transition-colors">
+                <Link href="/privacy" className="text-sm text-[var(--muted)] hover:text-[var(--gold-2)] transition-colors">
                   Privacy Policy
                 </Link>
               </li>
               <li>
-                <Link href="/refund" className="text-sm text-[var(--muted)] hover:text-white transition-colors">
+                <Link href="/refund" className="text-sm text-[var(--muted)] hover:text-[var(--gold-2)] transition-colors">
                   Refund Policy
                 </Link>
               </li>

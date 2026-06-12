@@ -51,11 +51,12 @@ export function SubscriptionGate({ requireGate, children, fallback }: Subscripti
 
         {/* Logo */}
         <div className="mb-4">
-          <span className="text-3xl font-bold tracking-tight text-[var(--primary)]">
+          <span className="text-3xl font-bold tracking-tight text-gold">
             Bistar
           </span>
         </div>
 
+        <p className="eyebrow mb-2">Premium membership</p>
         <h2 className="text-2xl sm:text-3xl font-bold mb-3">
           Subscribe to unlock content
         </h2>
@@ -67,14 +68,14 @@ export function SubscriptionGate({ requireGate, children, fallback }: Subscripti
         <div className="flex flex-col items-center gap-3">
           <Link
             href="/plans"
-            className="inline-flex items-center justify-center px-10 py-3.5 bg-[var(--primary)] text-white font-semibold rounded-lg hover:bg-[var(--primary-hover)] transition-colors text-base shadow-lg shadow-[var(--primary)]/20"
+            className="btn-gold inline-flex items-center justify-center px-10 py-3.5 font-semibold rounded-lg transition-colors text-base"
           >
             Subscribe Now
           </Link>
           {!firebaseUser && (
             <Link
               href="/auth/login"
-              className="text-sm text-[var(--muted)] hover:text-white transition-colors"
+              className="text-sm text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
             >
               Already have an account?{" "}
               <span className="text-[var(--foreground)] font-medium underline underline-offset-2">
@@ -86,7 +87,7 @@ export function SubscriptionGate({ requireGate, children, fallback }: Subscripti
 
         {/* Feature highlights */}
         <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-4 text-left">
-          <div className="p-4 rounded-xl bg-[var(--card)] border border-[var(--border)]">
+          <div className="p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] hover:border-[var(--gold-3)]/50 transition-colors">
             <div className="text-[var(--primary)] mb-2">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -96,7 +97,7 @@ export function SubscriptionGate({ requireGate, children, fallback }: Subscripti
             <h3 className="text-sm font-semibold mb-1">Unlimited Streaming</h3>
             <p className="text-xs text-[var(--muted)]">Watch anytime, anywhere</p>
           </div>
-          <div className="p-4 rounded-xl bg-[var(--card)] border border-[var(--border)]">
+          <div className="p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] hover:border-[var(--gold-3)]/50 transition-colors">
             <div className="text-[var(--primary)] mb-2">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
@@ -105,7 +106,7 @@ export function SubscriptionGate({ requireGate, children, fallback }: Subscripti
             <h3 className="text-sm font-semibold mb-1">HD Quality</h3>
             <p className="text-xs text-[var(--muted)]">Crystal clear video</p>
           </div>
-          <div className="p-4 rounded-xl bg-[var(--card)] border border-[var(--border)]">
+          <div className="p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] hover:border-[var(--gold-3)]/50 transition-colors">
             <div className="text-[var(--primary)] mb-2">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 00-1.883 2.542l.857 6a2.25 2.25 0 002.227 1.932H19.05a2.25 2.25 0 002.227-1.932l.857-6a2.25 2.25 0 00-1.883-2.542m-16.5 0V6A2.25 2.25 0 016 3.75h3.879a1.5 1.5 0 011.06.44l2.122 2.12a1.5 1.5 0 001.06.44H18A2.25 2.25 0 0120.25 9v.776" />

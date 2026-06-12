@@ -26,9 +26,12 @@ export function ContentCarousel({ title, items }: ContentCarouselProps) {
 
   return (
     <section className="mb-10">
-      <h2 className="text-xl font-semibold mb-4 px-4 sm:px-6 lg:px-8">
-        {title}
-      </h2>
+      <div className="mb-4 px-4 sm:px-6 lg:px-8">
+        <p className="eyebrow">Featured</p>
+        <h2 className="text-xl font-semibold">
+          {title}
+        </h2>
+      </div>
 
       <div className="relative group">
         {/* Left Arrow */}
@@ -64,7 +67,7 @@ export function ContentCarousel({ title, items }: ContentCarouselProps) {
               href={`/content/${item.id}`}
               className="flex-shrink-0 w-[160px] sm:w-[200px] md:w-[240px] group/card"
             >
-              <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-[var(--card)] shadow-lg shadow-black/30 transition-all duration-300 group-hover/card:-translate-y-2">
+              <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-[var(--card)] border border-[var(--border)] shadow-lg shadow-black/30 transition-all duration-300 group-hover/card:-translate-y-2 group-hover/card:border-[var(--gold-3)]/50">
                 <Image
                   src={item.thumbnail}
                   alt={item.title}
@@ -87,15 +90,15 @@ export function ContentCarousel({ title, items }: ContentCarouselProps) {
 
                 {/* Centered Play Icon on Hover */}
                 <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/card:opacity-100 transition-all duration-300">
-                  <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
-                    <svg className="w-5 h-5 text-black ml-0.5" viewBox="0 0 24 24" fill="currentColor">
+                  <div className="w-12 h-12 rounded-full bg-[var(--gold-2)] flex items-center justify-center shadow-lg shadow-[var(--gold-2)]/30">
+                    <svg className="w-5 h-5 text-[var(--on-primary)] ml-0.5" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M8 5v14l11-7z" />
                     </svg>
                   </div>
                 </div>
 
                 {/* Type Badge */}
-                <span className="absolute top-2 left-2 px-2 py-0.5 text-[10px] font-semibold uppercase rounded bg-[var(--primary)]/90 text-white">
+                <span className="absolute top-2 left-2 px-2 py-0.5 text-[10px] font-semibold uppercase rounded bg-[var(--gold-2)]/90 text-[var(--on-primary)]">
                   {item.type}
                 </span>
               </div>

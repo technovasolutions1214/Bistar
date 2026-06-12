@@ -183,7 +183,7 @@ export default function WatchPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
         <h2 className="text-xl font-semibold mb-2">Video not found</h2>
-        <Link href="/" className="text-[var(--primary)] hover:underline">
+        <Link href="/" className="btn-gold px-5 py-2 rounded-lg text-sm font-semibold">
           Go back home
         </Link>
       </div>
@@ -203,7 +203,7 @@ export default function WatchPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black pt-16">
+    <div className="min-h-screen bg-[var(--background)] pt-16">
       {/* Video Player */}
       <div className="w-full max-w-6xl mx-auto aspect-video bg-black">
         {urlLoading ? (
@@ -226,7 +226,8 @@ export default function WatchPage() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold">{video.title}</h1>
+            <p className="eyebrow mb-1">Now playing</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-gold">{video.title}</h1>
             {content.type === "series" && video.season && video.episode && (
               <p className="text-sm text-[var(--muted)] mt-1">
                 Season {video.season}, Episode {video.episode}
@@ -246,7 +247,7 @@ export default function WatchPage() {
         <div className="flex items-center justify-between gap-4 border-t border-[var(--border)] pt-4">
           <Link
             href={`/content/${content.id}`}
-            className="text-sm text-[var(--muted)] hover:text-white transition-colors flex items-center gap-1"
+            className="text-sm text-[var(--muted)] hover:text-[var(--gold-2)] transition-colors flex items-center gap-1"
           >
             <svg
               className="w-4 h-4"
@@ -269,7 +270,7 @@ export default function WatchPage() {
               {prevVideo && (
                 <Link
                   href={`/watch/${content.id}/${prevVideo.id}`}
-                  className="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--card)] text-white rounded-lg hover:bg-[var(--card-hover)] transition-colors"
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-lg hover:bg-[var(--card-hover)] hover:border-[var(--gold-3)]/50 transition-colors"
                 >
                   <svg
                     className="w-4 h-4"
@@ -290,7 +291,7 @@ export default function WatchPage() {
               {nextVideo && (
                 <Link
                   href={`/watch/${content.id}/${nextVideo.id}`}
-                  className="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--primary)] text-white rounded-lg hover:bg-[var(--primary-hover)] transition-colors"
+                  className="btn-gold flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-semibold"
                 >
                   Next
                   <svg

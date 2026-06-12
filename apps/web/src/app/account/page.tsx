@@ -104,8 +104,9 @@ export default function AccountPage() {
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-[var(--primary)]/15 to-transparent h-48" />
         <div className="relative max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-6">
+          <p className="eyebrow mb-3">My account</p>
           <div className="flex items-center gap-5">
-            <div className="relative h-20 w-20 rounded-full overflow-hidden ring-3 ring-[var(--primary)]/30 flex-shrink-0">
+            <div className="relative h-20 w-20 rounded-full overflow-hidden ring-gold flex-shrink-0">
               {userData.photoURL ? (
                 <Image
                   src={userData.photoURL}
@@ -114,7 +115,7 @@ export default function AccountPage() {
                   className="object-cover"
                 />
               ) : (
-                <div className="flex items-center justify-center h-full w-full bg-[var(--primary)] text-3xl font-bold text-white">
+                <div className="flex items-center justify-center h-full w-full bg-[var(--primary)] text-3xl font-bold text-[var(--on-primary)]">
                   {userData.displayName?.[0] || "U"}
                 </div>
               )}
@@ -134,7 +135,7 @@ export default function AccountPage() {
 
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6 pb-12">
         {/* Subscription Section */}
-        <section className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6">
+        <section className={`bg-[var(--card)] rounded-2xl p-6 transition ${isActive ? "ring-gold border border-[var(--gold-2)]" : "border border-[var(--border)] hover:border-[var(--gold-3)]/50"}`}>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold">Subscription</h2>
             {isActive && (
@@ -205,7 +206,7 @@ export default function AccountPage() {
           <div className="mt-4 pt-4 border-t border-[var(--border)]">
             <Link
               href="/plans"
-              className="inline-block px-5 py-2.5 bg-[var(--primary)] text-white text-sm font-medium rounded-lg hover:bg-[var(--primary-hover)] transition-colors"
+              className="btn-gold inline-block px-5 py-2.5 text-sm font-medium rounded-lg"
             >
               {isActive ? "Add More Days" : "Subscribe Now"}
             </Link>
@@ -213,7 +214,7 @@ export default function AccountPage() {
         </section>
 
         {/* Subscription History */}
-        <section className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6">
+        <section className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6 transition hover:border-[var(--gold-3)]/50">
           <h2 className="text-lg font-semibold mb-4">Subscription History</h2>
           {txLoading ? (
             <div className="flex justify-center py-4">
@@ -251,7 +252,7 @@ export default function AccountPage() {
         </section>
 
         {/* Account Actions */}
-        <section className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6">
+        <section className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6 transition hover:border-[var(--gold-3)]/50">
           <h2 className="text-lg font-semibold mb-4">Account</h2>
           <p className="text-xs text-[var(--muted)] mb-1">
             Member since {formatDate(userData.createdAt)}

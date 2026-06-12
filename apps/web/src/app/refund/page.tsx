@@ -8,6 +8,7 @@ export const metadata: Metadata = {
 export default function RefundPage() {
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-12">
+      <p className="eyebrow mb-2">Legal</p>
       <h1 className="text-3xl sm:text-4xl font-bold mb-2">Refund &amp; Cancellation Policy</h1>
       <p className="text-sm text-[var(--muted)] mb-10">
         Last updated: April 19, 2026
@@ -26,7 +27,7 @@ export default function RefundPage() {
           </p>
         </section>
 
-        <section className="border-l-4 border-[var(--primary)] bg-[var(--card)] p-5 rounded">
+        <section className="border-l-4 border-[var(--gold-2)] bg-[var(--card)] p-5 rounded">
           <h2 className="text-xl font-semibold mb-3">1. No Refunds &mdash; All Sales are Final</h2>
           <p>
             <strong>
@@ -139,7 +140,7 @@ export default function RefundPage() {
           <h2 className="text-xl font-semibold mb-3">9. How to Contact Us</h2>
           <p>
             For questions about this Policy or any payment matter, please email us at{" "}
-            <a href="mailto:support@bistar.app" className="text-[var(--primary)] hover:underline">
+            <a href="mailto:support@bistar.app" className="text-[var(--gold-2)] hover:text-[var(--gold-1)] hover:underline">
               support@bistar.app
             </a>
             . Please include your registered mobile number / email and the transaction

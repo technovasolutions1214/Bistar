@@ -111,6 +111,7 @@ export default function BrowsePage() {
       <SubscriptionGate requireGate={generalSettings?.requireSubscriptionToBrowse || false}>
       {/* Search */}
       <div className="mb-6">
+        <p className="eyebrow mb-2">Browse the library</p>
         <Input
           type="text"
           placeholder="Search movies, series..."
@@ -118,7 +119,7 @@ export default function BrowsePage() {
           onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
             setSearchTerm(e.target.value)
           }
-          className="w-full max-w-md bg-[var(--card)] border-[var(--border)] text-white placeholder:text-[var(--muted)] px-4 py-3 rounded-lg"
+          className="w-full max-w-md bg-[var(--card)] border-[var(--border)] text-[var(--foreground)] placeholder:text-[var(--muted)] px-4 py-3 rounded-lg focus:ring-[var(--gold-2)] focus:border-[var(--gold-2)]"
         />
       </div>
 
@@ -130,8 +131,8 @@ export default function BrowsePage() {
             onClick={() => setSelectedType(type)}
             className={`px-5 py-2 text-sm font-medium rounded-full transition-all duration-200 ${
               selectedType === type
-                ? "bg-[var(--primary)] text-white ring-2 ring-[var(--primary)] ring-offset-2 ring-offset-[var(--background)]"
-                : "bg-[var(--card)] text-[var(--muted)] hover:text-white hover:bg-[var(--card-hover)]"
+                ? "btn-gold ring-offset-2 ring-offset-[var(--background)]"
+                : "bg-[var(--card)] text-[var(--muted)] border border-[var(--border)] hover:text-[var(--foreground)] hover:border-[var(--gold-3)]/50 hover:bg-[var(--card-hover)]"
             }`}
           >
             {type === "all" ? "All" : type === "movie" ? "Movies" : "Series"}
@@ -149,8 +150,8 @@ export default function BrowsePage() {
             }
             className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-200 ${
               selectedGenre === genre
-                ? "bg-[var(--primary)] text-white ring-2 ring-[var(--primary)] scale-105"
-                : "bg-[var(--card)] text-[var(--muted)] hover:text-white hover:bg-[var(--card-hover)]"
+                ? "btn-gold scale-105"
+                : "bg-[var(--card)] text-[var(--muted)] border border-[var(--border)] hover:text-[var(--foreground)] hover:border-[var(--gold-3)]/50 hover:bg-[var(--card-hover)]"
             }`}
           >
             {genre}
@@ -197,7 +198,7 @@ export default function BrowsePage() {
                 href={`/content/${item.id}`}
                 className="group"
               >
-                <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-[var(--card)] shadow-lg shadow-black/20 transition-all duration-300 group-hover:-translate-y-1">
+                <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-[var(--card)] border border-[var(--border)] shadow-lg shadow-black/20 transition-all duration-300 group-hover:-translate-y-1 group-hover:border-[var(--gold-3)]/50">
                   <Image
                     src={item.thumbnail}
                     alt={item.title}
@@ -206,7 +207,7 @@ export default function BrowsePage() {
                     sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  <span className="absolute top-2 left-2 px-2 py-0.5 text-[10px] font-semibold uppercase rounded bg-[var(--primary)]/90 text-white">
+                  <span className="absolute top-2 left-2 px-2 py-0.5 text-[10px] font-semibold uppercase rounded bg-[var(--primary)]/90 text-[var(--on-primary)]">
                     {item.type}
                   </span>
 
@@ -219,7 +220,7 @@ export default function BrowsePage() {
                     </div>
                   </div>
                 </div>
-                <h3 className="mt-2 text-sm font-medium line-clamp-1 group-hover:text-[var(--primary)] transition-colors duration-300">
+                <h3 className="mt-2 text-sm font-medium line-clamp-1 group-hover:text-[var(--gold-2)] transition-colors duration-300">
                   {item.title}
                 </h3>
                 <p className="text-xs text-[var(--muted)] mt-0.5">

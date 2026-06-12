@@ -8,6 +8,7 @@ export const metadata: Metadata = {
 export default function PrivacyPage() {
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-12">
+      <p className="eyebrow mb-2">Legal</p>
       <h1 className="text-3xl sm:text-4xl font-bold mb-2">Privacy Policy</h1>
       <p className="text-sm text-[var(--muted)] mb-10">
         Last updated: April 19, 2026
@@ -224,13 +225,13 @@ export default function PrivacyPage() {
             <p>Attn: Grievance Officer &mdash; Bistar</p>
             <p>
               Email:{" "}
-              <a href="mailto:grievance@bistar.app" className="text-[var(--primary)] hover:underline">
+              <a href="mailto:grievance@bistar.app" className="text-[var(--gold-2)] hover:text-[var(--gold-1)] hover:underline">
                 grievance@bistar.app
               </a>
             </p>
             <p>
               Support:{" "}
-              <a href="mailto:support@bistar.app" className="text-[var(--primary)] hover:underline">
+              <a href="mailto:support@bistar.app" className="text-[var(--gold-2)] hover:text-[var(--gold-1)] hover:underline">
                 support@bistar.app
               </a>
             </p>

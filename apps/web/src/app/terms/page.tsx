@@ -8,6 +8,7 @@ export const metadata: Metadata = {
 export default function TermsPage() {
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-12">
+      <p className="eyebrow mb-2">Legal</p>
       <h1 className="text-3xl sm:text-4xl font-bold mb-2">Terms of Use</h1>
       <p className="text-sm text-[var(--muted)] mb-10">
         Last updated: April 19, 2026
@@ -78,7 +79,7 @@ export default function TermsPage() {
             limitation, cases of partial usage, non-usage, dissatisfaction, technical issues,
             service interruption, content removal, device incompatibility, accidental purchases,
             duplicate purchases, loss of access, account termination or any other reason. Please
-            review our <a href="/refund" className="text-[var(--primary)] hover:underline">Refund
+            review our <a href="/refund" className="text-[var(--gold-2)] hover:text-[var(--gold-1)] hover:underline">Refund
             Policy</a> before subscribing.
           </p>
         </section>
@@ -270,7 +271,7 @@ export default function TermsPage() {
           <h2 className="text-xl font-semibold mb-3">18. Contact</h2>
           <p>
             For any queries relating to these Terms, please write to us at{" "}
-            <a href="mailto:support@bistar.app" className="text-[var(--primary)] hover:underline">
+            <a href="mailto:support@bistar.app" className="text-[var(--gold-2)] hover:text-[var(--gold-1)] hover:underline">
               support@bistar.app
             </a>
             .

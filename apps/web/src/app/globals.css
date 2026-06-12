@@ -5,110 +5,131 @@
  * the emitted CSS without this source glob. */
 @source "../../../../packages/ui/src/**/*.{ts,tsx}";
 
+/* =========================================================================
+ * Bistar — Premium dark / cinematic theme. Warm near-black canvas with a
+ * gold/amber accent. Colour is driven entirely by these CSS variables so the
+ * whole app re-skins from here; gradients/glow live in the utilities below.
+ * ========================================================================= */
 :root {
-  --background: #0a0a0a;
-  --foreground: #ededed;
-  --primary: #e50914;
-  --primary-hover: #f40612;
-  --card: #1a1a2e;
-  --card-hover: #16213e;
-  --muted: #6b7280;
-  --border: #27272a;
+  --background: #0a0807;        /* deep warm near-black */
+  --background-elev: #100d09;   /* raised sections */
+  --foreground: #f5efe2;        /* warm white */
+
+  --primary: #e6ae4a;           /* gold */
+  --primary-hover: #f2c268;     /* lighter gold */
+  --on-primary: #1a1304;        /* near-black text sitting on gold */
+
+  --card: #15110b;              /* warm card surface */
+  --card-hover: #1e1810;
+  --muted: #9d9483;             /* warm muted text */
+  --border: #2a2317;            /* warm hairline border */
+
+  --gold-1: #f4d58a;
+  --gold-2: #e6ae4a;
+  --gold-3: #c98b2c;
+  --gold-glow: rgba(230, 174, 74, 0.45);
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(230, 174, 74, 0.08), transparent 60%),
+    var(--background);
   color: var(--foreground);
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- Cinematic utilities ---------------------------------------------- */
+
+/* Gold gradient wordmark / accent text */
+.text-gold {
+  background: linear-gradient(135deg, var(--gold-1), var(--gold-2) 45%, var(--gold-3));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Primary gold CTA — gradient fill, dark legible text, soft amber glow */
+.btn-gold {
+  background: linear-gradient(135deg, var(--gold-1), var(--gold-2) 55%, var(--gold-3));
+  color: var(--on-primary);
+  box-shadow: 0 10px 34px -10px var(--gold-glow);
+  transition: filter 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+.btn-gold:hover {
+  filter: brightness(1.07);
+  box-shadow: 0 14px 40px -10px var(--gold-glow);
+}
+.btn-gold:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+/* Frosted glass surface (nav, overlays, cards on imagery) */
+.glass {
+  background: rgba(18, 14, 9, 0.62);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+}
+
+/* Thin gold hairline / ring */
+.ring-gold {
+  box-shadow: 0 0 0 1px rgba(230, 174, 74, 0.35), 0 0 40px -12px var(--gold-glow);
+}
+
+/* Subtle gold uppercase eyebrow label */
+.eyebrow {
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  color: var(--gold-2);
 }
 
 /* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: var(--background);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--muted);
-}
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--background); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gold-3); }
 
 /* Skeleton shimmer animation */
 @keyframes shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
 }
-
 .animate-shimmer {
-  background: linear-gradient(
-    90deg,
-    var(--border) 25%,
-    var(--card-hover) 50%,
-    var(--border) 75%
-  );
+  background: linear-gradient(90deg, var(--border) 25%, var(--card-hover) 50%, var(--border) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
 }
 
 /* Text shadow utility */
-.text-shadow {
-  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.8);
-}
+.text-shadow { text-shadow: 0 2px 24px rgba(0, 0, 0, 0.85); }
 
 /* Smooth content fade-in animation */
 @keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
+.animate-fade-in { animation: fadeInUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 
-.animate-fade-in {
-  animation: fadeInUp 0.6s ease-out forwards;
+/* Slow cinematic zoom for hero imagery */
+@keyframes kenburns {
+  from { transform: scale(1); }
+  to { transform: scale(1.08); }
 }
+.animate-kenburns { animation: kenburns 20s ease-out forwards; }
 
 /* Right -> left looping marquee. The strip is rendered twice, so translating
  * by -50% shifts exactly one copy and loops seamlessly. */
 @keyframes marquee {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
 }
-
-.animate-marquee {
-  animation: marquee 45s linear infinite;
-  will-change: transform;
-}
+.animate-marquee { animation: marquee 45s linear infinite; will-change: transform; }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-marquee {
-    animation: none;
-  }
+  .animate-marquee, .animate-kenburns, .animate-fade-in { animation: none; }
 }
 
-/* Better selection colors */
-::selection {
-  background: var(--primary);
-  color: white;
-}
-
-::-moz-selection {
-  background: var(--primary);
-  color: white;
-}
+/* Selection colors */
+::selection { background: var(--gold-2); color: var(--on-primary); }
+::-moz-selection { background: var(--gold-2); color: var(--on-primary); }

@@ -152,7 +152,7 @@ export default function HomePage() {
               {hero.genre?.slice(0, 3).map((g) => (
                 <span
                   key={g}
-                  className="px-2.5 py-1 text-[10px] font-semibold uppercase rounded-full bg-white/10 backdrop-blur-sm text-white/90 border border-white/10"
+                  className="px-2.5 py-1 text-[10px] font-semibold uppercase rounded-full bg-white/10 backdrop-blur-sm text-white/90 border border-[var(--gold-2)]/30"
                 >
                   {g}
                 </span>
@@ -179,7 +179,7 @@ export default function HomePage() {
             <div className="flex items-center gap-3">
               <Link
                 href={`/content/${hero.id}`}
-                className="flex items-center gap-2 px-6 py-3 bg-[var(--primary)] text-white font-semibold rounded-lg hover:bg-[var(--primary-hover)] transition-colors"
+                className="btn-gold flex items-center gap-2 px-6 py-3 font-semibold rounded-lg"
               >
                 <svg
                   className="w-5 h-5"
@@ -215,7 +215,7 @@ export default function HomePage() {
       )}
 
       {/* Content sections */}
-      <div className="py-8">
+      <div className="py-12 space-y-4">
         <ContentCarousel title="Trending Now" items={trending} />
         <SeriesInfiniteGrid title="Web Series" />
       </div>
@@ -237,7 +237,8 @@ export default function HomePage() {
               d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"
             />
           </svg>
-          <h2 className="text-2xl font-bold mb-2">No content available yet</h2>
+          <p className="eyebrow mb-3">Coming soon</p>
+          <h2 className="text-2xl font-bold mb-2 text-[var(--foreground)]">No content available yet</h2>
           <p className="text-[var(--muted)] max-w-sm">
             We are working on adding new movies and series. Please check back later for updates.
           </p>

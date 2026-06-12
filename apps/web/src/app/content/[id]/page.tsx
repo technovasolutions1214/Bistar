@@ -87,7 +87,7 @@ export default function ContentDetailPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
         <h2 className="text-xl font-semibold mb-2">Content not found</h2>
-        <Link href="/" className="text-[var(--primary)] hover:underline">
+        <Link href="/" className="text-[var(--gold-2)] hover:underline">
           Go back home
         </Link>
       </div>
@@ -126,7 +126,7 @@ export default function ContentDetailPage() {
         </h1>
 
         <div className="flex items-center gap-3 mb-4 flex-wrap">
-          <span className="px-2.5 py-1 text-xs font-semibold uppercase rounded bg-[var(--primary)] text-white">
+          <span className="px-2.5 py-1 text-xs font-semibold uppercase rounded bg-[var(--primary)] text-[var(--on-primary)]">
             {content.type}
           </span>
           {content.rating && (
@@ -156,7 +156,8 @@ export default function ContentDetailPage() {
 
         {/* Subscription Prompt */}
         {!hasActiveSubscription && (
-          <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-6 mb-8">
+          <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-6 mb-8 ring-gold">
+            <p className="eyebrow mb-2">Premium access</p>
             <h3 className="text-lg font-semibold mb-2">
               Subscribe to watch
             </h3>
@@ -164,7 +165,7 @@ export default function ContentDetailPage() {
               You need an active subscription to stream this content.
             </p>
             <Link href="/plans">
-              <Button className="bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white px-6 py-2.5 rounded-lg font-medium">
+              <Button className="btn-gold px-6 py-2.5 rounded-lg font-medium">
                 View Plans
               </Button>
             </Link>
@@ -174,6 +175,7 @@ export default function ContentDetailPage() {
         {/* Videos List */}
         {videos.length > 0 && (
           <div className="mb-12">
+            <p className="eyebrow mb-1">Watch now</p>
             <h2 className="text-xl font-semibold mb-4">
               {content.type === "series" ? "Episodes" : "Videos"}
             </h2>
@@ -181,7 +183,7 @@ export default function ContentDetailPage() {
               {videos.map((video, index) => (
                 <div
                   key={video.id}
-                  className="flex items-center gap-4 bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 hover:bg-[var(--card-hover)] hover:border-[var(--card-hover)] hover:shadow-lg shadow-black/20 transition-all duration-200 group"
+                  className="flex items-center gap-4 bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 hover:bg-[var(--card-hover)] hover:border-[var(--gold-3)]/50 hover:shadow-lg shadow-black/20 transition-all duration-200 group"
                 >
                   {/* Thumbnail or Index */}
                   <div className="relative w-16 h-16 sm:w-24 sm:h-16 flex-shrink-0 rounded-lg overflow-hidden bg-[var(--background)]">
@@ -201,7 +203,7 @@ export default function ContentDetailPage() {
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-sm sm:text-base line-clamp-1 group-hover:text-white transition-colors">
+                    <h3 className="font-medium text-sm sm:text-base line-clamp-1 group-hover:text-[var(--foreground)] transition-colors">
                       {content.type === "series" && video.season && video.episode
                         ? `S${video.season} E${video.episode} - ${video.title}`
                         : video.title}
@@ -222,7 +224,7 @@ export default function ContentDetailPage() {
                   {hasActiveSubscription ? (
                     <Link
                       href={`/watch/${content.id}/${video.id}`}
-                      className="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] hover:scale-110 transition-all duration-200"
+                      className="btn-gold flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full hover:scale-110 transition-all duration-200"
                     >
                       <svg
                         className="w-5 h-5 ml-0.5"

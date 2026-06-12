@@ -95,6 +95,7 @@ export default function PlansPage() {
   return (
     <div className="min-h-screen pt-20 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto pb-20">
       <div className="text-center mb-8">
+        <p className="eyebrow mb-3">Choose your plan</p>
         <h1 className="text-3xl font-bold mb-3">
           {hasActiveSub ? "Extend Your Subscription" : "Get a Subscription"}
         </h1>
@@ -152,13 +153,13 @@ export default function PlansPage() {
                   key={plan.id}
                   className={`relative bg-[var(--card)] border rounded-2xl p-6 flex flex-col transition-all duration-300 hover:scale-[1.02] ${
                     isPopular
-                      ? "border-[var(--primary)] ring-2 ring-[var(--primary)] shadow-2xl shadow-[var(--primary)]/20 scale-105"
-                      : "border-[var(--border)]"
+                      ? "ring-gold border-[var(--gold-2)] scale-105"
+                      : "border-[var(--border)] hover:border-[var(--gold-3)]/50"
                   }`}
                 >
                   {/* Popular Badge */}
                   {isPopular && (
-                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-5 py-1.5 bg-gradient-to-r from-[var(--primary)] to-orange-500 text-white text-xs font-bold rounded-full uppercase tracking-wider">
+                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 btn-gold px-5 py-1.5 text-xs font-bold rounded-full uppercase tracking-wider">
                       Best Value
                     </div>
                   )}
@@ -172,7 +173,7 @@ export default function PlansPage() {
                     <span className="text-sm text-[var(--muted)] align-top">
                       {plan.currency === "INR" ? "\u20B9" : "$"}
                     </span>
-                    <span className="text-5xl font-bold">
+                    <span className="text-5xl font-bold text-gold">
                       {plan.price}
                     </span>
                     <span className="text-sm text-[var(--muted)] ml-1">
@@ -214,8 +215,8 @@ export default function PlansPage() {
                       checkoutPlan?.id === plan.id
                         ? "bg-[var(--card-hover)] text-[var(--muted)] cursor-wait"
                         : isPopular
-                          ? "bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)]"
-                          : "bg-white/10 text-white hover:bg-white/20"
+                          ? "btn-gold"
+                          : "bg-white/10 text-[var(--foreground)] hover:bg-white/20"
                     }`}
                   >
                     {hasActiveSub

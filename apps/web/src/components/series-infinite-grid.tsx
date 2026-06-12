@@ -118,6 +118,7 @@ export function SeriesInfiniteGrid({ title = "Web Series" }: { title?: string })
   if (loading) {
     return (
       <section className="mb-12 px-4 sm:px-6 lg:px-8">
+        <p className="eyebrow">Binge worthy</p>
         <h2 className="text-xl font-semibold mb-4">{title}</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
           {Array.from({ length: PAGE_SIZE }).map((_, i) => (
@@ -135,11 +136,12 @@ export function SeriesInfiniteGrid({ title = "Web Series" }: { title?: string })
 
   return (
     <section className="mb-12 px-4 sm:px-6 lg:px-8">
+      <p className="eyebrow">Binge worthy</p>
       <h2 className="text-xl font-semibold mb-4">{title}</h2>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
         {items.map((item) => (
           <Link key={item.id} href={`/content/${item.id}`} className="group/card">
-            <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-[var(--card)] shadow-lg shadow-black/30 transition-all duration-300 group-hover/card:-translate-y-1">
+            <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-[var(--card)] border border-[var(--border)] shadow-lg shadow-black/30 transition-all duration-300 group-hover/card:-translate-y-1 group-hover/card:border-[var(--gold-3)]/50">
               {item.thumbnail ? (
                 <Image
                   src={item.thumbnail}
@@ -155,7 +157,7 @@ export function SeriesInfiniteGrid({ title = "Web Series" }: { title?: string })
               )}
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
             </div>
-            <p className="text-sm font-medium mt-2 line-clamp-1 group-hover/card:text-white transition-colors">
+            <p className="text-sm font-medium mt-2 line-clamp-1 group-hover/card:text-[var(--primary)] transition-colors">
               {item.title}
             </p>
           </Link>

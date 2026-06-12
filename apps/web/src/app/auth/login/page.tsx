@@ -273,8 +273,9 @@ export default function LoginPage() {
   const loginForm = (
     <div className="w-full max-w-md bg-[var(--card)] border border-[var(--border)] rounded-2xl p-8">
       <div className="text-center mb-8">
-        <h1 className="text-2xl font-bold text-[var(--primary)] mb-1 lg:hidden">
-          Bistar
+        <p className="eyebrow mb-2">Welcome back</p>
+        <h1 className="text-2xl font-bold mb-1 lg:hidden">
+          <span className="text-gold">Bistar</span>
         </h1>
         <h2 className="text-xl font-semibold mb-1 hidden lg:block">Welcome Back</h2>
         <p className="text-sm text-[var(--muted)]">Sign in to start streaming</p>
@@ -322,7 +323,7 @@ export default function LoginPage() {
             <select
               value={countryCode}
               onChange={(e) => setCountryCode(e.target.value)}
-              className="w-24 bg-[var(--background)] border border-[var(--border)] text-white rounded-lg px-2 py-3 text-sm"
+              className="w-24 bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] rounded-lg px-2 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--gold-2)] focus:border-[var(--gold-2)]"
               disabled={!!configError}
             >
               <option value="+91">+91</option>
@@ -337,14 +338,14 @@ export default function LoginPage() {
               value={phone}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPhone(e.target.value)}
               disabled={!!configError}
-              className="flex-1 bg-[var(--background)] border-[var(--border)] text-white placeholder:text-[var(--muted)] px-4 py-3 rounded-lg"
+              className="flex-1 bg-[var(--background)] border-[var(--border)] text-[var(--foreground)] placeholder:text-[var(--muted)] px-4 py-3 rounded-lg focus:ring-[var(--gold-2)] focus:border-[var(--gold-2)]"
             />
           </div>
           <div id="msg91-captcha" className="flex justify-center min-h-0" />
           <Button
             onClick={handleSendOtp}
             disabled={loading || !widgetReady || !!configError}
-            className="w-full bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-medium py-3 rounded-lg disabled:opacity-50 transition-colors"
+            className="btn-gold w-full font-medium py-3 rounded-lg disabled:opacity-50"
           >
             {configError
               ? "Phone sign-in unavailable"
@@ -366,12 +367,12 @@ export default function LoginPage() {
             value={otp}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOtp(e.target.value)}
             maxLength={6}
-            className="w-full bg-[var(--background)] border-[var(--border)] text-white placeholder:text-[var(--muted)] px-4 py-3 rounded-lg text-center text-lg tracking-[0.5em]"
+            className="w-full bg-[var(--background)] border-[var(--border)] text-[var(--foreground)] placeholder:text-[var(--muted)] px-4 py-3 rounded-lg text-center text-lg tracking-[0.5em] focus:ring-[var(--gold-2)] focus:border-[var(--gold-2)]"
           />
           <Button
             onClick={handleVerifyOtp}
             disabled={loading}
-            className="w-full bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-medium py-3 rounded-lg disabled:opacity-50 transition-colors"
+            className="btn-gold w-full font-medium py-3 rounded-lg disabled:opacity-50"
           >
             {loading ? "Verifying..." : "Verify OTP"}
           </Button>
@@ -381,7 +382,7 @@ export default function LoginPage() {
               setOtp("");
               setError("");
             }}
-            className="w-full text-sm text-[var(--muted)] hover:text-white transition-colors"
+            className="w-full text-sm text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
           >
             Change phone number
           </button>
@@ -405,7 +406,7 @@ export default function LoginPage() {
           <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-[var(--primary)]/20 rounded-full blur-[100px]" />
           <div className="absolute bottom-1/3 right-1/4 w-48 h-48 bg-[var(--primary)]/10 rounded-full blur-[80px]" />
           <div className="relative z-10 text-center px-12">
-            <h1 className="text-5xl font-bold text-[var(--primary)] mb-4">Bistar</h1>
+            <h1 className="text-5xl font-bold text-gold mb-4">Bistar</h1>
             <p className="text-xl text-[var(--foreground)]/80 font-medium mb-2">
               Stream unlimited movies &amp; series
             </p>

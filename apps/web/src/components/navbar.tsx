@@ -38,25 +38,25 @@ export function Navbar() {
 
   return (
     <>
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-[var(--background)]/90 backdrop-blur-md border-b border-[var(--border)]">
+      <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-[var(--border)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-8">
-              <Link href="/" className="text-2xl font-bold text-[var(--primary)]">
+              <Link href="/" className="text-2xl font-extrabold tracking-tight text-gold">
                 Bistar
               </Link>
               <div className="hidden md:flex items-center gap-6">
-                <Link href="/" className="text-sm text-[var(--muted)] hover:text-white transition-colors">
+                <Link href="/" className="text-sm text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">
                   Home
                 </Link>
-                <Link href="/browse" className="text-sm text-[var(--muted)] hover:text-white transition-colors">
+                <Link href="/browse" className="text-sm text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">
                   Browse
                 </Link>
               </div>
             </div>
 
             <div className="flex items-center gap-4">
-              <Link href="/browse" className="text-[var(--muted)] hover:text-white transition-colors">
+              <Link href="/browse" className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
@@ -70,7 +70,7 @@ export function Navbar() {
                         onClick={() => setMenuOpen(!menuOpen)}
                         className="flex items-center gap-2 text-sm"
                       >
-                        <div className="h-8 w-8 rounded-full bg-[var(--primary)] flex items-center justify-center text-white font-medium">
+                        <div className="h-8 w-8 rounded-full btn-gold flex items-center justify-center font-semibold">
                           {firebaseUser.displayName?.[0] || firebaseUser.email?.[0] || "U"}
                         </div>
                       </button>
@@ -102,7 +102,7 @@ export function Navbar() {
                   ) : (
                     <Link
                       href="/auth/login"
-                      className="hidden md:inline-flex px-4 py-2 bg-[var(--primary)] text-white text-sm font-medium rounded-lg hover:bg-[var(--primary-hover)] transition-colors"
+                      className="btn-gold hidden md:inline-flex px-5 py-2 text-sm font-semibold rounded-lg"
                     >
                       Sign In
                     </Link>
@@ -140,7 +140,7 @@ export function Navbar() {
         }`}
       >
         <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
-          <span className="text-lg font-bold text-[var(--primary)]">Bistar</span>
+          <span className="text-lg font-extrabold tracking-tight text-gold">Bistar</span>
           <button
             onClick={() => setMobileOpen(false)}
             className="w-10 h-10 flex items-center justify-center text-[var(--muted)] hover:text-white"
