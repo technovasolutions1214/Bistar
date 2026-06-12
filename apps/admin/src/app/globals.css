@@ -5,23 +5,65 @@
  * the emitted CSS without this source glob. */
 @source "../../../../packages/ui/src/**/*.{ts,tsx}";
 
+/* =========================================================================
+ * Bistar Admin — matches the viewer app's premium-dark / cinematic theme:
+ * warm near-black canvas with a gold/amber accent. Status colours (success /
+ * warning / danger) are kept for data badges and progress states.
+ * ========================================================================= */
 :root {
-  --background: #0f172a;
-  --foreground: #e2e8f0;
-  --primary: #6366f1;
-  --primary-hover: #4f46e5;
-  --on-primary: #ffffff;
-  --card: #1e293b;
-  --card-hover: #334155;
-  --muted: #94a3b8;
-  --border: #334155;
+  --background: #0a0807;        /* deep warm near-black */
+  --background-elev: #100d09;
+  --foreground: #f5efe2;        /* warm white */
+
+  --primary: #e6ae4a;           /* gold */
+  --primary-hover: #f2c268;     /* lighter gold */
+  --on-primary: #1a1304;        /* near-black text on gold */
+
+  --card: #15110b;              /* warm card surface */
+  --card-hover: #1e1810;
+  --muted: #9d9483;             /* warm muted text */
+  --border: #2a2317;            /* warm hairline border */
+
+  --gold-1: #f4d58a;
+  --gold-2: #e6ae4a;
+  --gold-3: #c98b2c;
+  --gold-glow: rgba(230, 174, 74, 0.45);
+
   --success: #22c55e;
   --warning: #f59e0b;
   --danger: #ef4444;
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(120% 70% at 50% -10%, rgba(230, 174, 74, 0.06), transparent 55%),
+    var(--background);
   color: var(--foreground);
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
+
+/* Gold gradient wordmark / accent text (admin login + headings) */
+.text-gold {
+  background: linear-gradient(135deg, var(--gold-1), var(--gold-2) 45%, var(--gold-3));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Frosted glass surface */
+.glass {
+  background: rgba(18, 14, 9, 0.62);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--background); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gold-3); }
+
+/* Selection colors */
+::selection { background: var(--gold-2); color: var(--on-primary); }
+::-moz-selection { background: var(--gold-2); color: var(--on-primary); }
