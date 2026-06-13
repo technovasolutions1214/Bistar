@@ -61,10 +61,14 @@ initializeApp({ projectId: PROJECT });
 const db = getFirestore();
 const transcoder = new TranscoderServiceClient();
 
-const snap = await db.collectionGroup("videos").where("status", "in", ["processing", "failed"]).get();
+// Fetch-all + in-memory filter (no .where()): a collection-group query filtered
+// by a field needs a COLLECTION_GROUP single-field index; a full scan is fine at
+// this scale and keeps the one-time backfill index-free.
+const snap = await db.collectionGroup("videos").get();
 const candidates = [];
 snap.forEach((d) => {
   const v = d.data();
+  if (v.status !== "processing" && v.status !== "failed") return;
   if (v.jobName || v.jobState === "SUBMITTED" || v.jobState === "CLAIMING" || v.jobState === "DONE") return;
   if (v.source === "external") return;
   if (!v.storageRef) { console.warn(`!! ${d.ref.path} has no storageRef — skip`); return; }

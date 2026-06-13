@@ -131,25 +131,29 @@ export const onTranscodeComplete = onMessagePublished(
 );
 
 /**
- * Reconcile missed Pub/Sub messages + hung jobs every 30 min. Scans still-
- * "processing" docs that have a SUBMITTED job, polls getJob, and finalizes any
- * that already SUCCEEDED/FAILED. Single-field collectionGroup filter (jobState)
- * → no composite index needed.
+ * Reconcile missed Pub/Sub messages + hung jobs every 30 min. Scans the videos
+ * collection group, finds still-in-flight SUBMITTED jobs, polls getJob, and
+ * finalizes any that already SUCCEEDED/FAILED.
+ *
+ * Fetch-all + in-memory filter (no `.where()`) on purpose: a collection-group
+ * query filtered by a field requires a COLLECTION_GROUP single-field index
+ * (the automatic single-field indexes are collection-scoped only). At this
+ * library's scale a full scan every 30 min is negligible; add a collection-
+ * group index on jobState and re-introduce the filter if it ever grows large.
  */
 export const transcodeWatchdog = onSchedule(
   { schedule: "every 30 minutes", region: REGION, memory: "512MiB", timeoutSeconds: 300 },
   async () => {
-    const snap = await db
-      .collectionGroup("videos")
-      .where("jobState", "==", "SUBMITTED")
-      .get();
+    const snap = await db.collectionGroup("videos").get();
 
     let fixed = 0;
+    let inFlight = 0;
     for (const docSnap of snap.docs) {
       const data = docSnap.data();
-      if (data.status === "ready") continue;
+      if (data.jobState !== "SUBMITTED" || data.status === "ready") continue;
       const jobName: string | undefined = data.jobName;
       if (!jobName) continue;
+      inFlight++;
 
       // path: content/{contentId}/videos/{videoId}
       const parts = docSnap.ref.path.split("/");
@@ -170,6 +174,6 @@ export const transcodeWatchdog = onSchedule(
       }
     }
 
-    logger.info(`transcodeWatchdog: reconciled ${fixed} of ${snap.size} in-flight`);
+    logger.info(`transcodeWatchdog: reconciled ${fixed} of ${inFlight} in-flight`);
   },
 );

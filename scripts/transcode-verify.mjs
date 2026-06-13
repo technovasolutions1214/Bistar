@@ -28,8 +28,11 @@ const ALL = args.includes("--all");
 
 async function targets() {
   if (ALL) {
-    const snap = await db.collectionGroup("videos").where("status", "==", "ready").get();
-    return snap.docs.map((d) => { const p = d.ref.path.split("/"); return { contentId: p[1], videoId: p[3] }; });
+    // Fetch-all + filter (no .where()) to avoid a COLLECTION_GROUP index.
+    const snap = await db.collectionGroup("videos").get();
+    return snap.docs
+      .filter((d) => d.data().status === "ready")
+      .map((d) => { const p = d.ref.path.split("/"); return { contentId: p[1], videoId: p[3] }; });
   }
   const [contentId, videoId] = args;
   if (!contentId || !videoId) {
@@ -84,6 +87,9 @@ for (const t of await targets()) {
         const a = await get(u);
         if (!a.ok) errs.push(`segment ${seg} → HTTP ${a.status}`);
         if (a.len > MAX_SEG_BYTES) errs.push(`segment ${seg} too big (${(a.len / 1048576).toFixed(1)}MB)`);
+        // The worker writes its cache in waitUntil() AFTER responding, so the
+        // 1st GET's store races a too-quick 2nd GET. Small delay before re-GET.
+        await new Promise((r) => setTimeout(r, 1500));
         const b = await get(u); // 2nd GET → expect edge cache HIT
         if (b.cache && b.cache.toUpperCase() !== "HIT") errs.push(`segment ${seg} cf-cache=${b.cache} (expected HIT)`);
       }
