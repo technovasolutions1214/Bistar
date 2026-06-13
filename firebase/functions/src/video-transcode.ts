@@ -1,165 +1,114 @@
 import { onObjectFinalized } from "firebase-functions/v2/storage";
 import { logger } from "firebase-functions";
 import * as admin from "firebase-admin";
-import * as path from "path";
-import * as os from "os";
-import * as fs from "fs";
-import ffmpeg from "fluent-ffmpeg";
-import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
-
-ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+import { TranscoderServiceClient } from "@google-cloud/video-transcoder";
+import {
+  PROJECT,
+  REGION,
+  BUCKET,
+  PUBSUB_TOPIC,
+  buildJobConfig,
+  outputUriFor,
+  jobUuidFromName,
+} from "./transcode-config";
 
 if (!admin.apps.length) {
   admin.initializeApp();
 }
 
 const db = admin.firestore();
-const bucket = admin.storage().bucket();
+const transcoder = new TranscoderServiceClient();
 
-interface QualityPreset {
-  name: string;
-  width: number;
-  height: number;
-  videoBitrate: string;
-  audioBitrate: string;
-}
-
-const QUALITY_PRESETS: QualityPreset[] = [
-  { name: "360p", width: 640, height: 360, videoBitrate: "800k", audioBitrate: "96k" },
-  { name: "720p", width: 1280, height: 720, videoBitrate: "2500k", audioBitrate: "128k" },
-  { name: "1080p", width: 1920, height: 1080, videoBitrate: "5000k", audioBitrate: "192k" },
-];
-
-function transcodeToHLS(
-  inputPath: string,
-  outputDir: string,
-  preset: QualityPreset,
-): Promise<string> {
-  const qualityDir = path.join(outputDir, preset.name);
-  fs.mkdirSync(qualityDir, { recursive: true });
-  const playlistPath = path.join(qualityDir, "playlist.m3u8");
-
-  return new Promise((resolve, reject) => {
-    ffmpeg(inputPath)
-      .outputOptions([
-        `-vf scale=${preset.width}:${preset.height}:force_original_aspect_ratio=decrease,pad=${preset.width}:${preset.height}:(ow-iw)/2:(oh-ih)/2`,
-        `-b:v ${preset.videoBitrate}`,
-        `-b:a ${preset.audioBitrate}`,
-        "-c:v libx264",
-        "-preset fast",
-        "-c:a aac",
-        "-hls_time 6",
-        "-hls_list_size 0",
-        "-hls_segment_filename",
-        path.join(qualityDir, "segment_%03d.ts"),
-        "-f hls",
-      ])
-      .output(playlistPath)
-      .on("end", () => resolve(qualityDir))
-      .on("error", (err) => reject(err))
-      .run();
-  });
-}
-
-async function uploadDirectory(localDir: string, destPrefix: string): Promise<void> {
-  const files = fs.readdirSync(localDir);
-  const uploads = files.map((file) => {
-    const localPath = path.join(localDir, file);
-    const destPath = `${destPrefix}/${file}`;
-    return bucket.upload(localPath, {
-      destination: destPath,
-      predefinedAcl: "publicRead",
-      metadata: {
-        contentType: file.endsWith(".m3u8") ? "application/vnd.apple.mpegurl" : "video/mp2t",
-      },
-    });
-  });
-  await Promise.all(uploads);
-}
-
-function buildMasterPlaylist(presets: QualityPreset[]): string {
-  let playlist = "#EXTM3U\n";
-  for (const p of presets) {
-    const bandwidth = parseInt(p.videoBitrate) * 1000;
-    playlist += `#EXT-X-STREAM-INF:BANDWIDTH=${bandwidth},RESOLUTION=${p.width}x${p.height}\n`;
-    playlist += `${p.name}/playlist.m3u8\n`;
-  }
-  return playlist;
-}
-
+/**
+ * Storage finalize on videos/{contentId}/{videoId}/original/* → submit a GCP
+ * Transcoder job that outputs adaptive HLS to videos/{c}/{v}/hls/. Lightweight:
+ * it only submits the job and returns; onTranscodeComplete (Pub/Sub) flips the
+ * doc to "ready". Stays "processing" meanwhile, so the watch page keeps serving
+ * the signed-URL fallback until the transcode is done.
+ */
 export const onVideoUploaded = onObjectFinalized(
-  { timeoutSeconds: 540, memory: "2GiB", region: "asia-south1" },
+  { memory: "256MiB", timeoutSeconds: 120, region: REGION, bucket: BUCKET },
   async (event) => {
     const filePath = event.data.name;
     if (!filePath) return;
 
     const match = filePath.match(/^videos\/([^/]+)\/([^/]+)\/original\/(.+)$/);
     if (!match) return;
-
     const contentId = match[1];
     const videoId = match[2];
-    const fileName = match[3];
 
-    const tempDir = path.join(os.tmpdir(), `bistar-${contentId}-${videoId}`);
-    fs.mkdirSync(tempDir, { recursive: true });
+    const videoRef = db.doc(`content/${contentId}/videos/${videoId}`);
 
-    const localInput = path.join(tempDir, fileName);
-    const hlsOutputDir = path.join(tempDir, "hls");
-    fs.mkdirSync(hlsOutputDir, { recursive: true });
+    // Idempotency claim. Storage triggers are at-least-once and the v1 API has
+    // no custom job id, so a duplicate delivery would create a SECOND billed
+    // job. Claim the submit in a transaction BEFORE createJob.
+    const claimed = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(videoRef);
+      const data = snap.data() ?? {};
+      if (
+        data.jobState === "CLAIMING" ||
+        data.jobState === "SUBMITTED" ||
+        data.jobState === "DONE" ||
+        data.status === "ready"
+      ) {
+        return false;
+      }
+      tx.set(videoRef, { status: "processing", jobState: "CLAIMING" }, { merge: true });
+      return true;
+    });
 
-    const videoDocRef = db.doc(`content/${contentId}/videos/${videoId}`);
+    if (!claimed) {
+      logger.info(`onVideoUploaded: skipping duplicate for ${contentId}/${videoId}`);
+      return;
+    }
+
+    const inputUri = `gs://${BUCKET}/${filePath}`;
+    const outputUri = outputUriFor(contentId, videoId);
 
     try {
-      await videoDocRef.set({ status: "processing" }, { merge: true });
-      await bucket.file(filePath).download({ destination: localInput });
-
-      for (const preset of QUALITY_PRESETS) {
-        await transcodeToHLS(localInput, hlsOutputDir, preset);
-      }
-
-      const masterContent = buildMasterPlaylist(QUALITY_PRESETS);
-      const masterPath = path.join(hlsOutputDir, "master.m3u8");
-      fs.writeFileSync(masterPath, masterContent);
-
-      const destPrefix = `videos/${contentId}/${videoId}/transcoded`;
-
-      await bucket.upload(masterPath, {
-        destination: `${destPrefix}/master.m3u8`,
-        predefinedAcl: "publicRead",
-        metadata: { contentType: "application/vnd.apple.mpegurl" },
+      const [job] = await transcoder.createJob({
+        parent: transcoder.locationPath(PROJECT, REGION),
+        job: {
+          inputUri,
+          outputUri,
+          config: {
+            ...buildJobConfig(),
+            pubsubDestination: {
+              topic: `projects/${PROJECT}/topics/${PUBSUB_TOPIC}`,
+            },
+          },
+        },
       });
 
-      for (const preset of QUALITY_PRESETS) {
-        const qualityDir = path.join(hlsOutputDir, preset.name);
-        await uploadDirectory(qualityDir, `${destPrefix}/${preset.name}`);
-      }
+      const jobName = job.name ?? "";
+      const uuid = jobUuidFromName(jobName);
 
-      const cdnDomain = process.env.CDN_DOMAIN || "cdn.bistar.app";
-      const videoUrl = `https://${cdnDomain}/${destPrefix}/master.m3u8`;
+      // Reverse index: the completion message is a JobResult with only
+      // {job:{name,state,error}} — no output path — so map UUID → video doc.
+      await db.doc(`transcodeJobs/${uuid}`).set({
+        contentId,
+        videoId,
+        jobName,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
 
-      await videoDocRef.set(
-        {
-          status: "ready",
-          videoUrl,
-          qualities: QUALITY_PRESETS.map((p) => p.name),
-          transcodedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
+      await videoRef.set(
+        { status: "processing", jobState: "SUBMITTED", jobName },
         { merge: true },
       );
 
-      logger.info(`Transcoding complete for ${contentId}/${videoId}`);
+      logger.info(`onVideoUploaded: submitted ${jobName} for ${contentId}/${videoId}`);
     } catch (error) {
-      logger.error(`Transcoding failed for ${contentId}/${videoId}`, error);
-      await videoDocRef.set(
+      logger.error(`onVideoUploaded: createJob failed for ${contentId}/${videoId}`, error);
+      // Release the claim so a retry / the backfill can resubmit. Keep status
+      // "processing" so the signed-URL fallback keeps serving in the meantime.
+      await videoRef.set(
         {
-          status: "failed",
-          error: error instanceof Error ? error.message : String(error),
-          failedAt: admin.firestore.FieldValue.serverTimestamp(),
+          jobState: admin.firestore.FieldValue.delete(),
+          transcodeError: error instanceof Error ? error.message : String(error),
         },
         { merge: true },
       );
-    } finally {
-      fs.rmSync(tempDir, { recursive: true, force: true });
     }
   },
 );

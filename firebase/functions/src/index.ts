@@ -6,6 +6,7 @@
  */
 
 export { onVideoUploaded } from "./video-transcode";
+export { onTranscodeComplete, transcodeWatchdog } from "./transcode-complete";
 export { checkExpiredSubscriptions } from "./subscription";
 export { aggregateDailyAnalytics } from "./analytics";
 export { onPurchaseSendCapi } from "./marketing-capi";
