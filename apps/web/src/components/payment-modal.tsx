@@ -323,10 +323,16 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
             <iframe
               src={paymentUrl!}
               title="Payment"
-              // allow-top-navigation is intentionally excluded so PayU/flix.cinestry.com
-              // can't pull the whole tab out from under us. allow-popups lets 3DS
-              // open an OTP window if a bank still needs it.
-              sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+              // allow-top-navigation-by-user-activation lets a genuine user tap
+              // (choosing a UPI app) escape the iframe to launch that app's
+              // upi://-scheme / universal link. iOS Safari blocks app-launch
+              // navigation from a sandboxed cross-origin iframe unless top
+              // navigation is permitted, which is why "tap a UPI app → nothing"
+              // happens on iPhone (Android honours intent:// from the iframe).
+              // We use the -by-user-activation variant (not bare allow-top-
+              // navigation) so PayU still can't pull the tab out without a tap.
+              // allow-popups lets 3DS open an OTP window if a bank still needs it.
+              sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
               className="w-full h-[70vh] bg-white border-0"
             />
           )}
