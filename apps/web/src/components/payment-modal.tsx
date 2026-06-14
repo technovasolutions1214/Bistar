@@ -37,18 +37,6 @@ const MAX_POLL_DURATION_MS = 20 * 60 * 1000;
 
 const COUNTRY_CODES = ["+91", "+1", "+44", "+61", "+971"];
 
-// iOS Safari (and iPadOS, which reports as "Macintosh" but is touch-capable)
-// refuses to launch a native app from a custom URL scheme (upi://, gpay://,
-// phonepe://, paytm://) when that navigation originates inside a cross-origin
-// iframe — the scheme only fires from a TOP-LEVEL browsing context under a user
-// gesture. So on iOS we run PayU in a real browser tab instead of the iframe.
-// Android (intent://) and desktop are unaffected and keep the inline iframe.
-function isIOS(): boolean {
-  if (typeof navigator === "undefined" || typeof document === "undefined") return false;
-  const ua = navigator.userAgent;
-  return /iPad|iPhone|iPod/.test(ua) || (ua.includes("Macintosh") && "ontouchend" in document);
-}
-
 export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalProps) {
   const { firebaseUser } = useAuth();
   const router = useRouter();
@@ -68,10 +56,6 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
   const resolvedRef = useRef(false);
   const isGuestRef = useRef(false);
   const claimPhoneRef = useRef("");
-  // iOS-only: the PayU tab we open synchronously on the user's tap, and the last
-  // paymentUrl (so "Reopen payment tab" is a fresh user gesture).
-  const payWindowRef = useRef<Window | null>(null);
-  const lastPayUrlRef = useRef<string | null>(null);
 
   // A "real" user is signed in and NOT anonymous. Anonymous = mid guest checkout.
   const realUser = !!firebaseUser && !firebaseUser.isAnonymous;
@@ -79,34 +63,6 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
   const stopPolling = useCallback(() => {
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     pollTimerRef.current = null;
-  }, []);
-
-  // Point the pre-opened iOS tab at PayU. If it was blocked or the user closed
-  // it, fall back to a same-tab top-level navigation (still launches UPI on iOS
-  // because it's top-level; only ever called from inside a user gesture).
-  const sendToPayU = useCallback((url: string) => {
-    lastPayUrlRef.current = url;
-    const w = payWindowRef.current;
-    if (w && !w.closed) {
-      try {
-        w.location.href = url;
-        return;
-      } catch {
-        // cross-origin/blocked handle — fall through to same-tab
-      }
-    }
-    window.location.assign(url);
-  }, []);
-
-  const closePayWindow = useCallback(() => {
-    if (payWindowRef.current && !payWindowRef.current.closed) {
-      try {
-        payWindowRef.current.close();
-      } catch {
-        /* ignore */
-      }
-    }
-    payWindowRef.current = null;
   }, []);
 
   // Reset everything whenever the modal reopens.
@@ -118,8 +74,6 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
     setTxnId(null);
     setLoginFallback(false);
     setPhone("");
-    payWindowRef.current = null;
-    lastPayUrlRef.current = null;
     resolvedRef.current = false;
     startedAtRef.current = Date.now();
     // Signed-in users go straight to checkout; guests collect a phone first.
@@ -172,16 +126,6 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
           planId?: string;
         };
         if (body.status === "success") {
-          // iOS: drop the user back onto this (still-polling) tab by closing the
-          // PayU tab we opened. Best-effort — browsers may refuse after the tab
-          // navigated cross-origin.
-          if (isIOS() && payWindowRef.current && !payWindowRef.current.closed) {
-            try {
-              payWindowRef.current.close();
-            } catch {
-              /* ignore */
-            }
-          }
           // Fire Purchase with eventID=txnid so it dedupes against the
           // server-side CAPI Purchase the webhook trigger sends.
           track(
@@ -218,9 +162,6 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
   useEffect(() => {
     if (!open || !plan) return;
     if (status !== "opening" || isGuestRef.current) return;
-    // iOS signed-in users start checkout from the "Pay now" tap — window.open
-    // needs a user gesture, and this effect has none. Guests already tap.
-    if (isIOS()) return;
     let cancelled = false;
 
     (async () => {
@@ -259,52 +200,6 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
     };
   }, [open, plan, status, finish, pollOnce]);
 
-  // iOS signed-in checkout: triggered by the "Pay now" tap so window.open has a
-  // user gesture. Mirrors the auto-create effect but renders PayU in a top-level
-  // tab (opened synchronously here) instead of the iframe.
-  const startSignedInCheckoutIOS = useCallback(async () => {
-    if (!plan) return;
-    // Open the tab synchronously (first thing in the gesture) so iOS doesn't
-    // popup-block it; we point it at PayU once create() resolves.
-    payWindowRef.current = window.open("about:blank", "_blank");
-    try {
-      payWindowRef.current?.document.write(
-        '<title>Loading…</title><body style="font-family:-apple-system,sans-serif;padding:32px;color:#333">Loading secure payment…</body>',
-      );
-    } catch {
-      /* ignore */
-    }
-    setStatus("opening");
-    try {
-      const u = auth().currentUser;
-      if (!u) {
-        closePayWindow();
-        finish("error", "Please sign in again.");
-        return;
-      }
-      const token = await u.getIdToken();
-      const res = await fetch("/api/payment/payu/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ planId: plan.id }),
-      });
-      const body = await res.json();
-      if (!res.ok || !body.paymentUrl) {
-        closePayWindow();
-        finish("error", body.error || "Couldn't start the payment. Please try again.");
-        return;
-      }
-      recordAttribution(token, body.txnid);
-      setTxnId(body.txnid);
-      setStatus("waiting");
-      sendToPayU(body.paymentUrl);
-      pollTimerRef.current = setTimeout(() => pollOnce(body.txnid), POLL_INTERVAL_MS);
-    } catch (err) {
-      closePayWindow();
-      finish("error", err instanceof Error ? err.message : "Couldn't start the payment.");
-    }
-  }, [plan, finish, pollOnce, sendToPayU, closePayWindow]);
-
   // Guest checkout: triggered by the phone-form submit.
   const startGuestCheckout = useCallback(async () => {
     if (!plan) return;
@@ -312,18 +207,6 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
     if (national.length < 10) {
       setError("Please enter a valid phone number.");
       return;
-    }
-    // iOS: open the PayU tab NOW, synchronously within this tap, so it isn't
-    // popup-blocked; we point it at PayU once create() resolves.
-    if (isIOS()) {
-      payWindowRef.current = window.open("about:blank", "_blank");
-      try {
-        payWindowRef.current?.document.write(
-          '<title>Loading…</title><body style="font-family:-apple-system,sans-serif;padding:32px;color:#333">Loading secure payment…</body>',
-        );
-      } catch {
-        /* ignore */
-      }
     }
     const fullPhone = `${countryCode}${national}`;
     claimPhoneRef.current = fullPhone;
@@ -348,7 +231,6 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
       });
       const body = await res.json();
       if (!res.ok || !body.paymentUrl) {
-        closePayWindow();
         finish("error", body.error || "Couldn't start the payment. Please try again.");
         return;
       }
@@ -362,25 +244,17 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
         body: JSON.stringify({ txnid: body.txnid, phone: fullPhone }),
       });
       if (!gi.ok) {
-        closePayWindow();
         const gb = await gi.json().catch(() => ({}));
         finish("error", gb.error || "Couldn't start checkout. Please try again.");
         return;
       }
 
       recordAttribution(token, body.txnid);
-      if (isIOS()) {
-        // iOS: PayU runs in the tab we opened on the tap; no inline iframe.
-        sendToPayU(body.paymentUrl);
-        setPaymentUrl(null);
-      } else {
-        setPaymentUrl(body.paymentUrl);
-      }
+      setPaymentUrl(body.paymentUrl);
       setTxnId(body.txnid);
       setStatus("waiting");
       pollTimerRef.current = setTimeout(() => pollOnce(body.txnid), POLL_INTERVAL_MS);
     } catch (err) {
-      closePayWindow();
       const code = (err as { code?: string })?.code;
       if (code === "auth/operation-not-allowed" || code === "auth/admin-restricted-operation") {
         // Anonymous Auth not enabled in the project — degrade gracefully to the
@@ -391,16 +265,12 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
         finish("error", err instanceof Error ? err.message : "Couldn't start the payment.");
       }
     }
-  }, [plan, phone, countryCode, finish, pollOnce, sendToPayU, closePayWindow]);
+  }, [plan, phone, countryCode, finish, pollOnce]);
 
   if (!open) return null;
 
   const dismissable = status !== "waiting" && status !== "opening";
-  const onIOS = isIOS();
-  // Android/desktop: inline iframe. iOS: a top-level tab + status panels.
-  const showIframe = !onIOS && status === "waiting" && !!paymentUrl;
-  const showIOSPayNow = onIOS && !isGuestRef.current && status === "opening";
-  const showIOSWaiting = onIOS && status === "waiting";
+  const showIframe = status === "waiting" && !!paymentUrl;
 
   function goToLogin() {
     const q = claimPhoneRef.current
@@ -453,53 +323,21 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
             <iframe
               src={paymentUrl!}
               title="Payment"
-              // Android/desktop only — iOS runs PayU in a top-level tab (see
-              // isIOS()/sendToPayU) because Safari can't launch a UPI app from
-              // inside a cross-origin iframe. allow-top-navigation is excluded so
-              // PayU/flix.cinestry.com can't pull the whole tab out from under
-              // us; allow-popups lets 3DS open an OTP window if a bank needs it.
-              sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+              // UPI app-launch on iOS: when the user taps a UPI app, PayU inside
+              // this iframe navigates to a upi://-scheme. iOS Safari only lets
+              // that fire from a TOP-LEVEL context, so we grant the iframe both
+              // escape routes:
+              //   • allow-top-navigation — PayU can point the WHOLE TAB at the
+              //     upi:// link (iOS then hands it to the UPI app and returns).
+              //   • allow-popups + allow-popups-to-escape-sandbox — PayU can
+              //     instead open the link in a popup (also a top-level context),
+              //     and this is what 3DS/OTP windows use too.
+              // (If PayU ever launches by navigating THIS iframe to upi:// rather
+              // than the top/popup, iOS blocks it at the OS level and no iframe
+              // attribute can override that — that case needs a top-level flow.)
+              sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation"
               className="w-full h-[70vh] bg-white border-0"
             />
-          )}
-
-          {/* iOS signed-in: a real tap is required to open the PayU tab. */}
-          {showIOSPayNow && (
-            <div className="px-6 py-8 space-y-4 text-center min-h-[240px] flex flex-col items-center justify-center">
-              <p className="text-sm text-[var(--muted)]">
-                Payment opens in a new tab. After you pay, come back to this tab — it confirms
-                automatically.
-              </p>
-              <Button
-                onClick={startSignedInCheckoutIOS}
-                className="w-full bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-medium py-3 rounded-lg transition-colors"
-              >
-                Pay now
-              </Button>
-            </div>
-          )}
-
-          {/* iOS: PayU is in the other tab; this tab keeps polling for success. */}
-          {showIOSWaiting && (
-            <div className="px-6 py-8 text-center space-y-4 min-h-[240px] flex flex-col items-center justify-center">
-              <div className="w-12 h-12 rounded-full border-4 border-[var(--primary)] border-t-transparent animate-spin" />
-              <div>
-                <p className="text-base font-semibold mb-1">Complete payment in the new tab</p>
-                <p className="text-sm text-[var(--muted)]">
-                  This screen updates automatically once your payment is confirmed — keep it open.
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  if (lastPayUrlRef.current) {
-                    payWindowRef.current = window.open(lastPayUrlRef.current, "_blank");
-                  }
-                }}
-                className="text-xs text-[var(--primary)] underline underline-offset-2"
-              >
-                Reopen payment tab
-              </button>
-            </div>
           )}
 
           {/* Guest: collect a phone number before payment. */}
@@ -561,7 +399,7 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
             </div>
           )}
 
-          {!showIframe && !showIOSPayNow && !showIOSWaiting && status !== "collect" && status !== "claim" && (
+          {!showIframe && status !== "collect" && status !== "claim" && (
             <div className="px-6 py-8 text-center space-y-4 min-h-[240px] flex flex-col items-center justify-center">
               <StatusGraphic status={status} />
               <div>
