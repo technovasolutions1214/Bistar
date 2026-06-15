@@ -24,6 +24,7 @@ import { LandingHero } from "@/components/landing-hero";
 interface GeneralSettings {
   requireSubscriptionToBrowse?: boolean;
   defaultPlanId?: string;
+  landingBg?: string;
 }
 
 export default function HomePage() {
@@ -133,7 +134,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen pt-16">
-      <SubscriptionGate requireGate={generalSettings?.requireSubscriptionToBrowse || false} fallback={<LandingHero defaultPlanId={generalSettings?.defaultPlanId} />}>
+      <SubscriptionGate requireGate={generalSettings?.requireSubscriptionToBrowse || false} fallback={<LandingHero defaultPlanId={generalSettings?.defaultPlanId} landingBg={generalSettings?.landingBg} />}>
       {/* Hero Banner */}
       {hero && (
         <section className="relative h-[70vh] sm:h-[80vh] w-full">

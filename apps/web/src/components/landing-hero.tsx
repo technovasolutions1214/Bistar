@@ -15,7 +15,13 @@ import { HomeQuickCheckout } from "@/components/home-quick-checkout";
  * a gold-tinted edge mask. Background image is optional (drop one at
  * apps/web/public/landing-bg.jpg) — a layered warm gradient stands in until then.
  */
-export function LandingHero({ defaultPlanId }: { defaultPlanId?: string }) {
+export function LandingHero({
+  defaultPlanId,
+  landingBg,
+}: {
+  defaultPlanId?: string;
+  landingBg?: string;
+}) {
   const { firebaseUser } = useAuth();
   const [posters, setPosters] = useState<string[]>([]);
 
@@ -61,7 +67,7 @@ export function LandingHero({ defaultPlanId }: { defaultPlanId?: string }) {
        * warm gradients that always look intentional even with no image. */}
       <div
         className="absolute inset-0 bg-cover bg-center animate-kenburns"
-        style={{ backgroundImage: "url('/landing-bg.jpg')" }}
+        style={{ backgroundImage: `url('${landingBg || "/landing-bg.jpg"}')` }}
       />
       <div className="absolute inset-0 bg-[#0a0807]/80" />
       <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0a0807]/40 to-[var(--background)]" />

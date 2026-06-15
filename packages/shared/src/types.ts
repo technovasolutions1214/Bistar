@@ -92,6 +92,8 @@ export interface SiteSettings {
   requireSubscriptionToBrowse?: boolean;
   /** Plan id shown in the homepage quick-checkout (lives in settings/general). Empty = send visitors to /plans. */
   defaultPlanId?: string;
+  /** Uploaded landing-page hero background image URL (settings/general). Empty = static /landing-bg.jpg + gradient. */
+  landingBg?: string;
 }
 
 export interface AnalyticsEntry {

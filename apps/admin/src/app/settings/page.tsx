@@ -51,6 +51,9 @@ export default function SettingsPage() {
   const [existingLogo, setExistingLogo] = useState("");
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState("");
+  const [existingLandingBg, setExistingLandingBg] = useState("");
+  const [landingBgFile, setLandingBgFile] = useState<File | null>(null);
+  const [landingBgPreview, setLandingBgPreview] = useState("");
   const [metaPixelId, setMetaPixelId] = useState("");
 
   // Checkout — homepage default plan. savedDefaultPlanId tracks what's actually
@@ -91,6 +94,7 @@ export default function SettingsPage() {
           const data = generalSnap.data();
           setSiteName(data.siteName || "");
           setExistingLogo(data.logo || "");
+          setExistingLandingBg(typeof data.landingBg === "string" ? data.landingBg : "");
           setRequireSubscriptionToBrowse(data.requireSubscriptionToBrowse ?? false);
           setMetaPixelId(typeof data.metaPixelId === "string" ? data.metaPixelId : "");
           const dp = typeof data.defaultPlanId === "string" ? data.defaultPlanId : "";
@@ -239,10 +243,24 @@ export default function SettingsPage() {
         });
       }
 
+      // Upload landing-page background if changed
+      let landingBgUrl = existingLandingBg;
+      if (landingBgFile) {
+        const bgRef = ref(storage(), `settings/landing-bg_${Date.now()}`);
+        const task = uploadBytesResumable(bgRef, landingBgFile);
+        await new Promise<void>((resolve, reject) => {
+          task.on("state_changed", null, reject, async () => {
+            landingBgUrl = await getDownloadURL(task.snapshot.ref);
+            resolve();
+          });
+        });
+      }
+
       await Promise.all([
         setDoc(doc(db(), "settings", "general"), {
           siteName: siteName.trim(),
           logo: logoUrl,
+          landingBg: landingBgUrl,
           requireSubscriptionToBrowse,
           // Empty string = pixel disabled. Save the trimmed value verbatim
           // (don't deleteField — admins want to be able to leave it blank
@@ -482,6 +500,43 @@ export default function SettingsPage() {
                   }}
                 />
               </label>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Landing page background</label>
+            <div className="space-y-3">
+              {(landingBgPreview || existingLandingBg) && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={landingBgPreview || existingLandingBg}
+                  alt="Landing background"
+                  className="w-full h-32 rounded-lg object-cover bg-[var(--background)]"
+                />
+              )}
+              <label className="flex flex-col items-center justify-center px-4 py-4 rounded-lg border-2 border-dashed border-[var(--border)] hover:border-[var(--primary)] cursor-pointer transition-colors">
+                <span className="text-sm text-[var(--muted)]">
+                  {landingBgFile ? landingBgFile.name : "Click to upload background image"}
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setLandingBgFile(file);
+                      const reader = new FileReader();
+                      reader.onloadend = () => setLandingBgPreview(reader.result as string);
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+              </label>
+              <p className="text-xs text-[var(--muted)]">
+                Full-bleed image behind the homepage hero (logged-out / non-subscriber visitors). Use a
+                large landscape image (≈1920×1080). A warm gradient shows if none is set.
+              </p>
             </div>
           </div>
 
