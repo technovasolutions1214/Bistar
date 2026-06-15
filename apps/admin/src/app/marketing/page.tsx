@@ -1,6 +1,6 @@
 "use client";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { collection, getDocs, query, where, limit } from "firebase/firestore";
+import { collection, getDocs, query, where, limit, orderBy, Timestamp } from "firebase/firestore";
 import { db } from "@bistar/firebase-config";
 import { MarketingShell } from "@/components/marketing-shell";
 import { useAuth } from "@/lib/auth-context";
@@ -24,6 +24,8 @@ const RANGES = [
   { key: "90", label: "90 days", days: 90 },
   { key: "all", label: "All time", days: 0 },
 ];
+
+const MAX_DOCS = 20000; // safety cap; newest-first so today is always inside it
 
 // IST (Asia/Kolkata) calendar date, YYYY-MM-DD.
 const IST_FMT = new Intl.DateTimeFormat("en-CA", {
@@ -110,12 +112,32 @@ export default function MarketingOverviewPage() {
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState("30");
   const [pixelFilter, setPixelFilter] = useState(""); // "" = all pixels
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
+      // Scope to the selected window, NEWEST-first. Only purchased attribution
+      // docs carry `purchasedAt`, so ordering by it returns purchases only and
+      // uses Firestore's automatic single-field index (no composite index). The
+      // old `where(status==purchased) limit(2000)` had no orderBy, so Firestore
+      // returned the OLDEST 2000 by doc-id and hid today's purchases.
+      const days = RANGES.find((r) => r.key === range)?.days ?? 0;
+      const cutoffMs = days ? Date.now() - days * 86400000 : 0;
+      const attrCol = collection(db(), "attributions");
+      const attrQ = cutoffMs
+        ? query(
+            attrCol,
+            where("purchasedAt", ">=", Timestamp.fromMillis(cutoffMs)),
+            orderBy("purchasedAt", "desc"),
+            limit(MAX_DOCS)
+          )
+        : query(attrCol, orderBy("purchasedAt", "desc"), limit(MAX_DOCS));
+
       const [attrSnap, pixSnap] = await Promise.all([
-        getDocs(query(collection(db(), "attributions"), where("status", "==", "purchased"), limit(2000))),
+        getDocs(attrQ),
         getDocs(collection(db(), "pixels")),
       ]);
       const lbl: Record<string, string> = {};
@@ -126,15 +148,27 @@ export default function MarketingOverviewPage() {
 
       // Revenue lives ONLY on the admin-only `transactions` collection. Join it
       // in by txnid for admins; marketing staff never read it (and rules deny).
+      // Scope newest-first on createdAt (single-field range+orderBy, NO status
+      // equality → no composite index) and filter status client-side. Buffer the
+      // cutoff 2 days earlier because a purchase's transaction is created
+      // slightly before its purchasedAt.
       const amountByTxn: Record<string, number> = {};
       if (isAdmin) {
         try {
-          const txSnap = await getDocs(
-            query(collection(db(), "transactions"), where("status", "==", "success"), limit(2000))
-          );
+          const txCol = collection(db(), "transactions");
+          const txCutoffMs = cutoffMs ? cutoffMs - 2 * 86400000 : 0;
+          const txQ = txCutoffMs
+            ? query(
+                txCol,
+                where("createdAt", ">=", Timestamp.fromMillis(txCutoffMs)),
+                orderBy("createdAt", "desc"),
+                limit(MAX_DOCS)
+              )
+            : query(txCol, orderBy("createdAt", "desc"), limit(MAX_DOCS));
+          const txSnap = await getDocs(txQ);
           txSnap.docs.forEach((d) => {
-            const a = d.data().amount;
-            if (typeof a === "number") amountByTxn[d.id] = a;
+            const x = d.data();
+            if (x.status === "success" && typeof x.amount === "number") amountByTxn[d.id] = x.amount;
           });
         } catch (err) {
           console.error("Failed to load revenue:", err);
@@ -157,12 +191,14 @@ export default function MarketingOverviewPage() {
           };
         })
       );
+      setUpdatedAt(Date.now());
     } catch (err) {
       console.error("Failed to load marketing analytics:", err);
+      setLoadError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
-  }, [isAdmin]);
+  }, [range, isAdmin]);
 
   useEffect(() => {
     load();
@@ -177,13 +213,12 @@ export default function MarketingOverviewPage() {
     [labels]
   );
 
-  const filtered = useMemo(() => {
-    const days = RANGES.find((r) => r.key === range)?.days ?? 0;
-    const cutoff = days ? Date.now() - days * 86400000 : 0;
-    return rows.filter(
-      (r) => (!days || r.at >= cutoff) && (!pixelFilter || r.pixelSlug === pixelFilter)
-    );
-  }, [rows, range, pixelFilter]);
+  // Date filtering is now server-side (the queries are scoped to the window),
+  // so the client only narrows by the selected pixel.
+  const filtered = useMemo(
+    () => rows.filter((r) => !pixelFilter || r.pixelSlug === pixelFilter),
+    [rows, pixelFilter]
+  );
 
   const totals = useMemo(() => {
     let revenue = 0;
@@ -241,19 +276,44 @@ export default function MarketingOverviewPage() {
             </button>
           ))}
         </div>
-        <select
-          value={pixelFilter}
-          onChange={(e) => setPixelFilter(e.target.value)}
-          className="bg-[var(--card)] border border-[var(--border)] text-sm rounded-lg px-3 py-1.5 max-w-[260px]"
-        >
-          <option value="">All pixels</option>
-          {pixelOptions.map((p) => (
-            <option key={p.slug} value={p.slug}>
-              {p.label}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2">
+          {updatedAt && (
+            <span className="text-xs text-[var(--muted)] whitespace-nowrap">
+              Updated{" "}
+              {new Date(updatedAt).toLocaleTimeString("en-IN", {
+                timeZone: "Asia/Kolkata",
+                hour12: false,
+              })}{" "}
+              IST
+            </span>
+          )}
+          <select
+            value={pixelFilter}
+            onChange={(e) => setPixelFilter(e.target.value)}
+            className="bg-[var(--card)] border border-[var(--border)] text-sm rounded-lg px-3 py-1.5 max-w-[260px]"
+          >
+            <option value="">All pixels</option>
+            {pixelOptions.map((p) => (
+              <option key={p.slug} value={p.slug}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={() => load()}
+            disabled={loading}
+            className="px-3 py-1.5 rounded-lg text-sm font-medium border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--card)] disabled:opacity-50 transition-colors"
+          >
+            {loading ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
       </div>
+
+      {loadError && (
+        <div className="mb-5 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-400">
+          Couldn&apos;t load analytics: {loadError}
+        </div>
+      )}
 
       {loading ? (
         <div className="py-16 flex justify-center"><Loader /></div>
