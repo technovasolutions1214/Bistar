@@ -4,7 +4,6 @@ import {
   doc,
   getDoc,
   setDoc,
-  updateDoc,
   collection,
   query,
   where,
@@ -145,32 +144,28 @@ export default function SettingsPage() {
         return;
       }
 
-      const field = isEmail ? "email" : "phone";
-      const q = query(collection(db(), "users"), where(field, "==", input));
-      const snap = await getDocs(q);
-
-      if (!snap.empty) {
-        const userDoc = snap.docs[0];
-        if (userDoc.data().role === "admin") {
-          setAddAdminError("This user is already an admin.");
-          setAddAdminLoading(false);
-          return;
-        }
-        await updateDoc(doc(db(), "users", userDoc.id), { role: "admin", updatedAt: serverTimestamp() });
-        toast.success(`${input} has been promoted to admin.`);
-      } else {
-        const newDocRef = doc(collection(db(), "users"));
-        await setDoc(newDocRef, {
-          ...(isEmail ? { email: input } : { phone: input }),
-          displayName: input,
-          role: "admin",
-          subscription: null,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-        toast.success(`Admin created for ${input}. They'll have admin access when they sign in.`);
+      // Resolve the real Firebase Auth uid server-side and grant admin on the
+      // uid-keyed users doc (the exact doc the auth gate reads). The old
+      // client-side flow created a doc with a RANDOM id when the person had no
+      // users doc yet, so the role never matched their sign-in uid.
+      const token = await firebaseUser!.getIdToken();
+      const res = await fetch("/api/admin/admins", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(isEmail ? { email: input } : { phone: input }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAddAdminError(body.error || "Failed to add admin.");
+        setAddAdminLoading(false);
+        return;
       }
-
+      toast.success(
+        `${input} is now an admin.` +
+          (body.cleaned
+            ? ` (cleared ${body.cleaned} stale entr${body.cleaned === 1 ? "y" : "ies"})`
+            : ""),
+      );
       setAddAdminInput("");
       fetchAdmins();
     } catch (err) {
@@ -185,7 +180,17 @@ export default function SettingsPage() {
     if (!removeModalUid) return;
     setRemoveLoading(true);
     try {
-      await updateDoc(doc(db(), "users", removeModalUid), { role: "user", updatedAt: serverTimestamp() });
+      const token = await firebaseUser!.getIdToken();
+      const res = await fetch(`/api/admin/admins?uid=${encodeURIComponent(removeModalUid)}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(body.error || "Failed to remove admin.");
+        setRemoveLoading(false);
+        return;
+      }
       setRemoveModalUid(null);
       fetchAdmins();
       toast.success("Admin privileges removed successfully.");
