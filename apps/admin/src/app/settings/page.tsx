@@ -53,8 +53,10 @@ export default function SettingsPage() {
   const [logoPreview, setLogoPreview] = useState("");
   const [metaPixelId, setMetaPixelId] = useState("");
 
-  // Checkout — homepage default plan
+  // Checkout — homepage default plan. savedDefaultPlanId tracks what's actually
+  // LIVE (last persisted), separate from the dropdown's current selection.
   const [defaultPlanId, setDefaultPlanId] = useState("");
+  const [savedDefaultPlanId, setSavedDefaultPlanId] = useState("");
   const [activePlans, setActivePlans] = useState<Plan[]>([]);
 
   // Admin management
@@ -91,7 +93,9 @@ export default function SettingsPage() {
           setExistingLogo(data.logo || "");
           setRequireSubscriptionToBrowse(data.requireSubscriptionToBrowse ?? false);
           setMetaPixelId(typeof data.metaPixelId === "string" ? data.metaPixelId : "");
-          setDefaultPlanId(typeof data.defaultPlanId === "string" ? data.defaultPlanId : "");
+          const dp = typeof data.defaultPlanId === "string" ? data.defaultPlanId : "";
+          setDefaultPlanId(dp);
+          setSavedDefaultPlanId(dp);
         }
 
         if (msg91Snap.exists()) {
@@ -268,6 +272,7 @@ export default function SettingsPage() {
         }, { merge: true }),
       ]);
 
+      setSavedDefaultPlanId(defaultPlanId || "");
       toast.success("Settings saved successfully");
     } catch (err) {
       console.error("Failed to save settings:", err);
@@ -517,8 +522,31 @@ export default function SettingsPage() {
             </select>
             <p className="text-xs text-[var(--muted)] mt-1">
               Shown in the homepage quick-checkout (default plan + phone + inline payment, no page
-              leave). Leave as None to send visitors to the full plans page instead. Remember to Save.
+              leave). Leave as None to send visitors to the full plans page instead.
             </p>
+            {(() => {
+              const lp = savedDefaultPlanId ? activePlans.find((p) => p.id === savedDefaultPlanId) : null;
+              const dirty = defaultPlanId !== savedDefaultPlanId;
+              return (
+                <p className="text-xs mt-2 text-[var(--muted)]">
+                  Live on homepage:{" "}
+                  {!savedDefaultPlanId ? (
+                    <span className="text-[var(--foreground)]">None — visitors go to the plans page</span>
+                  ) : lp ? (
+                    <span className="text-[var(--primary)] font-medium">
+                      {lp.name} — ₹{lp.price}
+                    </span>
+                  ) : (
+                    <span className="text-yellow-500">
+                      selected plan is inactive — visitors go to the plans page
+                    </span>
+                  )}
+                  {dirty && (
+                    <span className="text-[var(--primary)]"> · unsaved change, click Save</span>
+                  )}
+                </p>
+              );
+            })()}
           </div>
         </div>
 
