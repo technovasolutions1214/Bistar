@@ -1,42 +1,42 @@
 "use client";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { collection, getDocs, query, where, limit, orderBy, Timestamp } from "firebase/firestore";
+import { collection, getDocs, query, where, orderBy, limit, Timestamp } from "firebase/firestore";
 import { db } from "@bistar/firebase-config";
 import { MarketingShell } from "@/components/marketing-shell";
 import { useAuth } from "@/lib/auth-context";
 import { Loader } from "@bistar/ui";
 
-interface AttrRow {
-  txnid: string;
-  pixelSlug?: string;
-  adAccount?: string;
-  campaignId?: string;
-  adId?: string;
-  country?: string;
-  value: number; // 0 for marketing (revenue is admin-only); joined from transactions for admins
-  capiStatus?: string;
-  at: number; // ms
-}
+// ---------------------------------------------------------------------------
+// Scalable marketing analytics. Past IST days are read from pre-aggregated
+// daily rollups (marketingDaily / marketingDailyRevenue — one small doc per
+// day, written by the aggregateMarketingDaily function), and TODAY is read
+// live from `attributions` (a bounded query). So the dashboard reads ≈
+// window-days docs + today, never thousands of raw conversions, and never hits
+// Firestore's 10k query cap. Revenue stays admin-only at the data layer
+// (separate admin-only revenue rollup; live today's revenue joins from
+// admin-only transactions).
+// ---------------------------------------------------------------------------
 
 const RANGES = [
+  { key: "today", label: "Today", days: 1 },
   { key: "7", label: "7 days", days: 7 },
   { key: "30", label: "30 days", days: 30 },
   { key: "90", label: "90 days", days: 90 },
   { key: "all", label: "All time", days: 0 },
 ];
 
-// Firestore rejects a query limit above 10000. Newest-first, so today is always inside it.
-const MAX_DOCS = 10000;
+const MAX_DOCS = 10000; // Firestore's hard query-limit; only today/live uses it, well under.
+const DAY_MS = 86400000;
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+const NONE = "(none)"; // must match the rollup sentinel for a missing dimension
 
-// IST (Asia/Kolkata) calendar date, YYYY-MM-DD.
-const IST_FMT = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "Asia/Kolkata",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
-function istDate(ms: number): string {
-  return ms ? IST_FMT.format(new Date(ms)) : "(unknown)";
+// IST calendar date (YYYY-MM-DD) for a UTC instant.
+function istDay(ms: number): string {
+  return new Date(ms + IST_OFFSET_MS).toISOString().slice(0, 10);
+}
+// IST midnight of *today* as a UTC instant (ms).
+function istTodayMidnightMs(): number {
+  return new Date(`${istDay(Date.now())}T00:00:00+05:30`).getTime();
 }
 
 function tsToMs(ts: unknown): number {
@@ -48,18 +48,169 @@ function tsToMs(ts: unknown): number {
   return 0;
 }
 
-function groupBy(rows: AttrRow[], keyFn: (r: AttrRow) => string | undefined) {
-  const m = new Map<string, { count: number; revenue: number }>();
-  for (const r of rows) {
-    const k = keyFn(r) || "(direct / none)";
-    const cur = m.get(k) || { count: 0, revenue: 0 };
-    cur.count++;
-    cur.revenue += r.value;
-    m.set(k, cur);
+type Grp = { count: number; revenue: number };
+interface Agg {
+  count: number;
+  revenue: number;
+  capi: { sent: number; error: number; skipped: number };
+  byDate: Record<string, Grp>;
+  byPixel: Record<string, Grp>;
+  byAccount: Record<string, Grp>;
+  byCampaign: Record<string, Grp>;
+  byCountry: Record<string, Grp>;
+}
+const emptyAgg = (): Agg => ({
+  count: 0,
+  revenue: 0,
+  capi: { sent: 0, error: 0, skipped: 0 },
+  byDate: {},
+  byPixel: {},
+  byAccount: {},
+  byCampaign: {},
+  byCountry: {},
+});
+function addGrp(m: Record<string, Grp>, key: string | undefined, count: number, revenue: number) {
+  const k = key || NONE;
+  const g = m[k] || (m[k] = { count: 0, revenue: 0 });
+  g.count += count;
+  g.revenue += revenue;
+}
+function mergeAgg(a: Agg, b: Agg): Agg {
+  const m = emptyAgg();
+  for (const src of [a, b]) {
+    m.count += src.count;
+    m.revenue += src.revenue;
+    m.capi.sent += src.capi.sent;
+    m.capi.error += src.capi.error;
+    m.capi.skipped += src.capi.skipped;
+    (["byDate", "byPixel", "byAccount", "byCampaign", "byCountry"] as const).forEach((dim) => {
+      for (const [k, g] of Object.entries(src[dim])) addGrp(m[dim], k, g.count, g.revenue);
+    });
   }
-  return [...m.entries()]
-    .map(([k, v]) => ({ k, ...v }))
-    .sort((a, b) => b.count - a.count || b.revenue - a.revenue);
+  return m;
+}
+
+// TODAY (and the Today range): live, bounded query of today's purchased
+// attributions; pixel filter applied client-side (today's volume is small).
+async function liveAgg(cutoffMs: number, slug: string | null, isAdmin: boolean): Promise<Agg> {
+  const attrSnap = await getDocs(
+    query(
+      collection(db(), "attributions"),
+      where("purchasedAt", ">=", Timestamp.fromMillis(cutoffMs)),
+      orderBy("purchasedAt", "desc"),
+      limit(MAX_DOCS),
+    ),
+  );
+  const amt: Record<string, number> = {};
+  if (isAdmin && !attrSnap.empty) {
+    const txSnap = await getDocs(
+      query(
+        collection(db(), "transactions"),
+        where("createdAt", ">=", Timestamp.fromMillis(Math.max(0, cutoffMs - 2 * DAY_MS))),
+        orderBy("createdAt", "desc"),
+        limit(MAX_DOCS),
+      ),
+    );
+    txSnap.forEach((d) => {
+      const x = d.data();
+      if (x.status === "success" && typeof x.amount === "number") amt[d.id] = x.amount as number;
+    });
+  }
+  const agg = emptyAgg();
+  attrSnap.forEach((d) => {
+    const x = d.data();
+    const pixel = (x.pixelSlug as string | undefined) || NONE;
+    if (slug && pixel !== slug) return;
+    const rev = amt[d.id] || 0;
+    const capiKey = x.capiStatus === "sent" ? "sent" : x.capiStatus === "error" ? "error" : "skipped";
+    agg.count++;
+    agg.revenue += rev;
+    agg.capi[capiKey]++;
+    addGrp(agg.byDate, istDay(tsToMs(x.purchasedAt)), 1, rev);
+    addGrp(agg.byPixel, pixel, 1, rev);
+    addGrp(agg.byAccount, x.adAccount as string | undefined, 1, rev);
+    addGrp(agg.byCampaign, x.campaignId as string | undefined, 1, rev);
+    addGrp(agg.byCountry, x.country as string | undefined, 1, rev);
+  });
+  return agg;
+}
+
+// Past IST days from the daily rollups. With a pixel filter, reads that pixel's
+// nested slice; otherwise the top-level totals. Revenue only for admins.
+async function rollupAgg(
+  startDate: string,
+  todayDate: string,
+  slug: string | null,
+  isAdmin: boolean,
+): Promise<Agg> {
+  const cntSnap = await getDocs(
+    query(
+      collection(db(), "marketingDaily"),
+      where("date", ">=", startDate),
+      where("date", "<", todayDate),
+      orderBy("date", "desc"),
+    ),
+  );
+  const revByDate: Record<string, Record<string, unknown>> = {};
+  if (isAdmin) {
+    const revSnap = await getDocs(
+      query(
+        collection(db(), "marketingDailyRevenue"),
+        where("date", ">=", startDate),
+        where("date", "<", todayDate),
+        orderBy("date", "desc"),
+      ),
+    );
+    revSnap.forEach((d) => {
+      revByDate[d.id] = d.data();
+    });
+  }
+  const agg = emptyAgg();
+  const num = (v: unknown) => (typeof v === "number" ? v : 0);
+  cntSnap.forEach((d) => {
+    const c = d.data() as Record<string, unknown>;
+    const r = revByDate[d.id] || {};
+    if (slug) {
+      const p = ((c.byPixel as Record<string, never>) || {})[slug] as
+        | { count?: number; capi?: { sent?: number; error?: number; skipped?: number }; byAccount?: Record<string, number>; byCampaign?: Record<string, number>; byCountry?: Record<string, number> }
+        | undefined;
+      if (!p) return;
+      const rp = (((r.byPixel as Record<string, never>) || {})[slug] || {}) as {
+        revenue?: number;
+        byAccount?: Record<string, number>;
+        byCampaign?: Record<string, number>;
+        byCountry?: Record<string, number>;
+      };
+      agg.count += num(p.count);
+      agg.revenue += num(rp.revenue);
+      agg.capi.sent += num(p.capi?.sent);
+      agg.capi.error += num(p.capi?.error);
+      agg.capi.skipped += num(p.capi?.skipped);
+      addGrp(agg.byDate, c.date as string, num(p.count), num(rp.revenue));
+      addGrp(agg.byPixel, slug, num(p.count), num(rp.revenue));
+      for (const [k, n] of Object.entries(p.byAccount || {})) addGrp(agg.byAccount, k, n, num(rp.byAccount?.[k]));
+      for (const [k, n] of Object.entries(p.byCampaign || {})) addGrp(agg.byCampaign, k, n, num(rp.byCampaign?.[k]));
+      for (const [k, n] of Object.entries(p.byCountry || {})) addGrp(agg.byCountry, k, n, num(rp.byCountry?.[k]));
+    } else {
+      const capi = (c.capi as { sent?: number; error?: number; skipped?: number }) || {};
+      agg.count += num(c.totalCount);
+      agg.revenue += num(r.totalRevenue);
+      agg.capi.sent += num(capi.sent);
+      agg.capi.error += num(capi.error);
+      agg.capi.skipped += num(capi.skipped);
+      addGrp(agg.byDate, c.date as string, num(c.totalCount), num(r.totalRevenue));
+      const revPixel = (r.byPixel as Record<string, { revenue?: number }>) || {};
+      for (const [slg, p] of Object.entries((c.byPixel as Record<string, { count?: number }>) || {}))
+        addGrp(agg.byPixel, slg, num(p.count), num(revPixel[slg]?.revenue));
+      for (const [k, n] of Object.entries((c.byAccount as Record<string, number>) || {}))
+        addGrp(agg.byAccount, k, n, num((r.byAccount as Record<string, number>)?.[k]));
+      for (const [k, n] of Object.entries((c.byCampaign as Record<string, number>) || {}))
+        addGrp(agg.byCampaign, k, n, num((r.byCampaign as Record<string, number>)?.[k]));
+      for (const [k, n] of Object.entries((c.byCountry as Record<string, number>) || {}))
+        addGrp(agg.byCountry, k, n, num((r.byCountry as Record<string, number>)?.[k]));
+    }
+  });
+  return agg;
 }
 
 function Breakdown({
@@ -76,26 +227,26 @@ function Breakdown({
   max?: number;
 }) {
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
-      <h3 className="text-sm font-semibold mb-3">{title}</h3>
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden">
+      <div className="px-4 py-3 border-b border-[var(--border)] text-sm font-semibold">{title}</div>
       {rows.length === 0 ? (
-        <p className="text-xs text-[var(--muted)]">No data.</p>
+        <div className="px-4 py-6 text-sm text-[var(--muted)]">No data.</div>
       ) : (
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-xs text-[var(--muted)] text-left">
-              <th className="font-medium pb-2">{firstCol}</th>
-              <th className="font-medium pb-2 text-right">Purchases</th>
-              {showRevenue && <th className="font-medium pb-2 text-right">Revenue</th>}
+            <tr className="text-left text-xs text-[var(--muted)]">
+              <th className="px-4 py-2 font-medium">{firstCol}</th>
+              <th className="px-4 py-2 font-medium text-right">Conv.</th>
+              {showRevenue && <th className="px-4 py-2 font-medium text-right">Revenue</th>}
             </tr>
           </thead>
           <tbody>
             {rows.slice(0, max).map((r) => (
               <tr key={r.k} className="border-t border-[var(--border)]">
-                <td className="py-2 pr-2 truncate max-w-[220px]">{r.k}</td>
-                <td className="py-2 text-right tabular-nums">{r.count}</td>
+                <td className="px-4 py-2 truncate max-w-[220px]">{r.k}</td>
+                <td className="px-4 py-2 text-right tabular-nums">{r.count.toLocaleString("en-IN")}</td>
                 {showRevenue && (
-                  <td className="py-2 text-right tabular-nums">₹{r.revenue.toLocaleString("en-IN")}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">₹{r.revenue.toLocaleString("en-IN")}</td>
                 )}
               </tr>
             ))}
@@ -108,90 +259,42 @@ function Breakdown({
 
 export default function MarketingOverviewPage() {
   const { isAdmin } = useAuth();
-  const [rows, setRows] = useState<AttrRow[]>([]);
+  const [agg, setAgg] = useState<Agg | null>(null);
   const [labels, setLabels] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const [range, setRange] = useState("30");
+  const [range, setRange] = useState("today");
   const [pixelFilter, setPixelFilter] = useState(""); // "" = all pixels
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
-      // Scope to the selected window, NEWEST-first. Only purchased attribution
-      // docs carry `purchasedAt`, so ordering by it returns purchases only and
-      // uses Firestore's automatic single-field index (no composite index). The
-      // old `where(status==purchased) limit(2000)` had no orderBy, so Firestore
-      // returned the OLDEST 2000 by doc-id and hid today's purchases.
-      const days = RANGES.find((r) => r.key === range)?.days ?? 0;
-      const cutoffMs = days ? Date.now() - days * 86400000 : 0;
-      const attrCol = collection(db(), "attributions");
-      const attrQ = cutoffMs
-        ? query(
-            attrCol,
-            where("purchasedAt", ">=", Timestamp.fromMillis(cutoffMs)),
-            orderBy("purchasedAt", "desc"),
-            limit(MAX_DOCS)
-          )
-        : query(attrCol, orderBy("purchasedAt", "desc"), limit(MAX_DOCS));
-
-      const [attrSnap, pixSnap] = await Promise.all([
-        getDocs(attrQ),
-        getDocs(collection(db(), "pixels")),
-      ]);
+      const pixSnap = await getDocs(collection(db(), "pixels"));
       const lbl: Record<string, string> = {};
-      pixSnap.docs.forEach((d) => {
+      pixSnap.forEach((d) => {
         lbl[d.id] = (d.data().label as string) || d.id;
       });
       setLabels(lbl);
 
-      // Revenue lives ONLY on the admin-only `transactions` collection. Join it
-      // in by txnid for admins; marketing staff never read it (and rules deny).
-      // Scope newest-first on createdAt (single-field range+orderBy, NO status
-      // equality → no composite index) and filter status client-side. Buffer the
-      // cutoff 2 days earlier because a purchase's transaction is created
-      // slightly before its purchasedAt.
-      const amountByTxn: Record<string, number> = {};
-      if (isAdmin) {
-        try {
-          const txCol = collection(db(), "transactions");
-          const txCutoffMs = cutoffMs ? cutoffMs - 2 * 86400000 : 0;
-          const txQ = txCutoffMs
-            ? query(
-                txCol,
-                where("createdAt", ">=", Timestamp.fromMillis(txCutoffMs)),
-                orderBy("createdAt", "desc"),
-                limit(MAX_DOCS)
-              )
-            : query(txCol, orderBy("createdAt", "desc"), limit(MAX_DOCS));
-          const txSnap = await getDocs(txQ);
-          txSnap.docs.forEach((d) => {
-            const x = d.data();
-            if (x.status === "success" && typeof x.amount === "number") amountByTxn[d.id] = x.amount;
-          });
-        } catch (err) {
-          console.error("Failed to load revenue:", err);
-        }
-      }
+      const days = RANGES.find((r) => r.key === range)?.days ?? 0;
+      const todayMid = istTodayMidnightMs();
+      const todayDate = istDay(Date.now());
+      const slug = pixelFilter || null;
 
-      setRows(
-        attrSnap.docs.map((d) => {
-          const x = d.data();
-          return {
-            txnid: d.id,
-            pixelSlug: x.pixelSlug as string | undefined,
-            adAccount: x.adAccount as string | undefined,
-            campaignId: x.campaignId as string | undefined,
-            adId: x.adId as string | undefined,
-            country: x.country as string | undefined,
-            value: amountByTxn[d.id] ?? 0,
-            capiStatus: x.capiStatus as string | undefined,
-            at: tsToMs(x.purchasedAt ?? x.createdAt),
-          };
-        })
-      );
+      let result: Agg;
+      if (range === "today") {
+        result = await liveAgg(todayMid, slug, isAdmin);
+      } else {
+        const startDate = days ? istDay(todayMid - (days - 1) * DAY_MS) : "0000-01-01";
+        const [past, today] = await Promise.all([
+          rollupAgg(startDate, todayDate, slug, isAdmin),
+          liveAgg(todayMid, slug, isAdmin),
+        ]);
+        result = mergeAgg(past, today);
+      }
+      setAgg(result);
       setUpdatedAt(Date.now());
     } catch (err) {
       console.error("Failed to load marketing analytics:", err);
@@ -199,68 +302,41 @@ export default function MarketingOverviewPage() {
     } finally {
       setLoading(false);
     }
-  }, [range, isAdmin]);
+  }, [range, pixelFilter, isAdmin]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  // All configured pixels (for the selector), sorted by label.
   const pixelOptions = useMemo(
     () =>
       Object.entries(labels)
         .map(([slug, label]) => ({ slug, label }))
         .sort((a, b) => a.label.localeCompare(b.label)),
-    [labels]
+    [labels],
   );
 
-  // Date filtering is now server-side (the queries are scoped to the window),
-  // so the client only narrows by the selected pixel.
-  const filtered = useMemo(
-    () => rows.filter((r) => !pixelFilter || r.pixelSlug === pixelFilter),
-    [rows, pixelFilter]
+  const sortRows = (m: Record<string, Grp>, label?: (k: string) => string) =>
+    Object.entries(m)
+      .map(([k, g]) => ({ k: k === NONE ? "(direct / none)" : label ? label(k) : k, count: g.count, revenue: g.revenue }))
+      .sort((a, b) => b.count - a.count || b.revenue - a.revenue);
+
+  const totals = agg ?? emptyAgg();
+  const byDate = useMemo(
+    () =>
+      Object.entries(agg?.byDate ?? {})
+        .map(([k, g]) => ({ k, count: g.count, revenue: g.revenue }))
+        .sort((a, b) => (a.k < b.k ? 1 : -1)),
+    [agg],
   );
-
-  const totals = useMemo(() => {
-    let revenue = 0;
-    const capi = { sent: 0, error: 0, skipped: 0 };
-    for (const r of filtered) {
-      revenue += r.value;
-      if (r.capiStatus === "sent") capi.sent++;
-      else if (r.capiStatus === "error") capi.error++;
-      else capi.skipped++;
-    }
-    return { count: filtered.length, revenue, capi };
-  }, [filtered]);
-
-  // Date-wise (IST) — most recent day first.
-  const byDate = useMemo(() => {
-    const m = new Map<string, { count: number; revenue: number }>();
-    for (const r of filtered) {
-      const k = istDate(r.at);
-      const cur = m.get(k) || { count: 0, revenue: 0 };
-      cur.count++;
-      cur.revenue += r.value;
-      m.set(k, cur);
-    }
-    return [...m.entries()]
-      .map(([k, v]) => ({ k, ...v }))
-      .sort((a, b) => (a.k < b.k ? 1 : -1));
-  }, [filtered]);
-
-  const byPixel = useMemo(
-    () => groupBy(filtered, (r) => (r.pixelSlug ? labels[r.pixelSlug] || r.pixelSlug : undefined)),
-    [filtered, labels]
-  );
-  const byAccount = useMemo(() => groupBy(filtered, (r) => r.adAccount), [filtered]);
-  const byCampaign = useMemo(() => groupBy(filtered, (r) => r.campaignId), [filtered]);
-  const byCountry = useMemo(() => groupBy(filtered, (r) => r.country), [filtered]);
-
+  const byPixel = useMemo(() => sortRows(agg?.byPixel ?? {}, (s) => labels[s] || s), [agg, labels]);
+  const byAccount = useMemo(() => sortRows(agg?.byAccount ?? {}), [agg]);
+  const byCampaign = useMemo(() => sortRows(agg?.byCampaign ?? {}), [agg]);
+  const byCountry = useMemo(() => sortRows(agg?.byCountry ?? {}), [agg]);
   const selectedPixelLabel = pixelFilter ? labels[pixelFilter] || pixelFilter : null;
 
   return (
     <MarketingShell>
-      {/* Controls: date range + pixel selector */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
         <div className="flex items-center gap-1">
           {RANGES.map((r) => (
@@ -281,13 +357,16 @@ export default function MarketingOverviewPage() {
           {updatedAt && (
             <span className="text-xs text-[var(--muted)] whitespace-nowrap">
               Updated{" "}
-              {new Date(updatedAt).toLocaleTimeString("en-IN", {
-                timeZone: "Asia/Kolkata",
-                hour12: false,
-              })}{" "}
-              IST
+              {new Date(updatedAt).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour12: false })} IST
             </span>
           )}
+          <button
+            onClick={() => load()}
+            disabled={loading}
+            className="px-3 py-1.5 rounded-lg text-sm font-medium border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--card)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {loading ? "Refreshing…" : "Refresh"}
+          </button>
           <select
             value={pixelFilter}
             onChange={(e) => setPixelFilter(e.target.value)}
@@ -300,13 +379,6 @@ export default function MarketingOverviewPage() {
               </option>
             ))}
           </select>
-          <button
-            onClick={() => load()}
-            disabled={loading}
-            className="px-3 py-1.5 rounded-lg text-sm font-medium border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--card)] disabled:opacity-50 transition-colors"
-          >
-            {loading ? "Refreshing…" : "Refresh"}
-          </button>
         </div>
       </div>
 
@@ -317,10 +389,11 @@ export default function MarketingOverviewPage() {
       )}
 
       {loading ? (
-        <div className="py-16 flex justify-center"><Loader /></div>
+        <div className="py-16 flex justify-center">
+          <Loader />
+        </div>
       ) : (
         <div className="space-y-6">
-          {/* Summary — Revenue card is admin-only */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Card label="Purchases" value={totals.count.toLocaleString("en-IN")} />
             {isAdmin && <Card label="Revenue" value={`₹${totals.revenue.toLocaleString("en-IN")}`} />}
@@ -332,16 +405,14 @@ export default function MarketingOverviewPage() {
             />
           </div>
 
-          {/* Date-wise (IST) — scoped to the selected pixel when one is chosen */}
           <Breakdown
             title={selectedPixelLabel ? `By date (IST) — ${selectedPixelLabel}` : "By date (IST)"}
             rows={byDate}
             showRevenue={isAdmin}
             firstCol="Date"
-            max={31}
+            max={92}
           />
 
-          {/* Source breakdowns — Revenue column is admin-only */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {!pixelFilter && <Breakdown title="By pixel" rows={byPixel} showRevenue={isAdmin} />}
             <Breakdown title="By ad account" rows={byAccount} showRevenue={isAdmin} />
@@ -350,7 +421,8 @@ export default function MarketingOverviewPage() {
           </div>
 
           <p className="text-xs text-[var(--muted)]">
-            {selectedPixelLabel ? `Showing ${selectedPixelLabel}. ` : ""}Dates are IST calendar days. Conversions attributed from captured ad parameters.
+            {selectedPixelLabel ? `Showing ${selectedPixelLabel}. ` : ""}Today is live; earlier IST days come
+            from daily rollups, so totals stay accurate at any volume.
             {isAdmin
               ? " Ad spend / ROAS would require the Meta Marketing API and isn't included here."
               : " Revenue figures are admin-only."}
@@ -366,7 +438,7 @@ function Card({ label, value, hint }: { label: string; value: string; hint?: str
     <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
       <p className="text-xs text-[var(--muted)]">{label}</p>
       <p className="text-2xl font-bold mt-1">{value}</p>
-      {hint && <p className="text-[11px] text-[var(--muted)] mt-1">{hint}</p>}
+      {hint && <p className="text-xs text-[var(--muted)] mt-1">{hint}</p>}
     </div>
   );
 }

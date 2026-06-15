@@ -135,5 +135,20 @@ service cloud.firestore {
       allow read: if isMarketingStaff();
       allow write: if false;
     }
+
+    // ---------- Marketing: daily rollups (scalable analytics) ----------
+
+    match /marketingDaily/{date} {
+      // Pre-aggregated per-IST-day COUNTS + CAPI. Server-written only
+      // (aggregateMarketingDaily). Marketing staff + admin read it.
+      allow read: if isMarketingStaff();
+      allow write: if false;
+    }
+
+    match /marketingDailyRevenue/{date} {
+      // Per-IST-day REVENUE. Server-written only. Admin-only (revenue split).
+      allow read: if isAdmin();
+      allow write: if false;
+    }
   }
 }

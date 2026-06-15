@@ -10,3 +10,4 @@ export { onTranscodeComplete, transcodeWatchdog } from "./transcode-complete";
 export { checkExpiredSubscriptions } from "./subscription";
 export { aggregateDailyAnalytics } from "./analytics";
 export { onPurchaseSendCapi } from "./marketing-capi";
+export { aggregateMarketingDaily } from "./marketing-analytics";
