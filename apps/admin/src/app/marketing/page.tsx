@@ -25,7 +25,8 @@ const RANGES = [
   { key: "all", label: "All time", days: 0 },
 ];
 
-const MAX_DOCS = 20000; // safety cap; newest-first so today is always inside it
+// Firestore rejects a query limit above 10000. Newest-first, so today is always inside it.
+const MAX_DOCS = 10000;
 
 // IST (Asia/Kolkata) calendar date, YYYY-MM-DD.
 const IST_FMT = new Intl.DateTimeFormat("en-CA", {
