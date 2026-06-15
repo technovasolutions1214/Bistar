@@ -59,8 +59,6 @@ export async function POST(request: NextRequest) {
 
   const ref = db.collection("users").doc(rec.uid);
   const before = await ref.get();
-  if (before.exists && before.data()?.role === "admin")
-    return NextResponse.json({ error: "That user is already an admin." }, { status: 409 });
 
   await ref.set(
     {
@@ -74,6 +72,12 @@ export async function POST(request: NextRequest) {
     },
     { merge: true },
   );
+
+  // Also set the admin custom claim — Storage security rules and the Firestore
+  // isAdmin() helper read the CLAIM (not the users-doc role), e.g. for uploading
+  // site assets in Settings. The user must re-sign-in for a fresh token to pick
+  // it up. Idempotent: re-adding an existing admin repairs a missing claim.
+  await getAdminAuth().setCustomUserClaims(rec.uid, { ...(rec.customClaims || {}), admin: true });
 
   // Clean up orphan role:"admin" docs the old client flow created (same
   // email/phone, random id != the real uid) so the admin list isn't polluted.
@@ -109,5 +113,14 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "Not an admin user." }, { status: 404 });
 
   await ref.set({ role: "user", updatedAt: new Date() }, { merge: true });
+  // Drop the admin custom claim too (keep any other claims).
+  try {
+    const u = await getAdminAuth().getUser(uid);
+    const claims = { ...(u.customClaims || {}) } as Record<string, unknown>;
+    delete claims.admin;
+    await getAdminAuth().setCustomUserClaims(uid, claims);
+  } catch {
+    /* ignore */
+  }
   return NextResponse.json({ ok: true });
 }

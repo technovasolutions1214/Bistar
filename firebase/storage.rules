@@ -41,5 +41,16 @@ service firebase.storage {
         && request.resource.size < 10 * 1024 * 1024 // 10 MB
         && request.resource.contentType.matches('image/.*');
     }
+
+    // ---------- Site settings assets ----------
+    // Logo + landing-page background. Admins upload (admin custom claim — Storage
+    // rules can't read the Firestore role); anyone can read (shown publicly).
+
+    match /settings/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin()
+        && request.resource.size < 15 * 1024 * 1024 // 15 MB
+        && request.resource.contentType.matches('image/.*');
+    }
   }
 }
