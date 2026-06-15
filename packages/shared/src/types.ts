@@ -90,6 +90,8 @@ export interface SiteSettings {
   heroTitle?: string;
   heroDescription?: string;
   requireSubscriptionToBrowse?: boolean;
+  /** Plan id shown in the homepage quick-checkout (lives in settings/general). Empty = send visitors to /plans. */
+  defaultPlanId?: string;
 }
 
 export interface AnalyticsEntry {

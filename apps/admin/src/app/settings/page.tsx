@@ -16,6 +16,7 @@ import { db, storage } from "@bistar/firebase-config";
 import { AdminLayout } from "@/components/admin-layout";
 import { useAuth } from "@/lib/auth-context";
 import { Button, Input, Loader, Modal, useToast } from "@bistar/ui";
+import type { Plan } from "@bistar/shared";
 
 interface AdminUser {
   uid: string;
@@ -52,6 +53,10 @@ export default function SettingsPage() {
   const [logoPreview, setLogoPreview] = useState("");
   const [metaPixelId, setMetaPixelId] = useState("");
 
+  // Checkout — homepage default plan
+  const [defaultPlanId, setDefaultPlanId] = useState("");
+  const [activePlans, setActivePlans] = useState<Plan[]>([]);
+
   // Admin management
   const [admins, setAdmins] = useState<AdminUser[]>([]);
   const [adminsLoading, setAdminsLoading] = useState(true);
@@ -64,11 +69,21 @@ export default function SettingsPage() {
   useEffect(() => {
     async function fetchSettings() {
       try {
-        const [generalSnap, msg91Snap, payuSnap] = await Promise.all([
+        const [generalSnap, msg91Snap, payuSnap, plansSnap] = await Promise.all([
           getDoc(doc(db(), "settings", "general")),
           getDoc(doc(db(), "settings", "msg91")),
           getDoc(doc(db(), "settings", "payu")),
+          getDocs(collection(db(), "plans")),
         ]);
+
+        // Active plans for the default-plan picker (filter + sort client-side
+        // to avoid a composite index).
+        setActivePlans(
+          plansSnap.docs
+            .map((d) => ({ id: d.id, ...d.data() }) as Plan)
+            .filter((p) => p.isActive)
+            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+        );
 
         if (generalSnap.exists()) {
           const data = generalSnap.data();
@@ -76,6 +91,7 @@ export default function SettingsPage() {
           setExistingLogo(data.logo || "");
           setRequireSubscriptionToBrowse(data.requireSubscriptionToBrowse ?? false);
           setMetaPixelId(typeof data.metaPixelId === "string" ? data.metaPixelId : "");
+          setDefaultPlanId(typeof data.defaultPlanId === "string" ? data.defaultPlanId : "");
         }
 
         if (msg91Snap.exists()) {
@@ -228,6 +244,9 @@ export default function SettingsPage() {
           // (don't deleteField — admins want to be able to leave it blank
           // intentionally, and reading "" is just as effective as missing).
           metaPixelId: metaPixelId.trim(),
+          // Homepage quick-checkout default plan. "" = no quick-checkout (send
+          // visitors to /plans).
+          defaultPlanId: defaultPlanId || "",
           updatedAt: serverTimestamp(),
         }, { merge: true }),
         setDoc(doc(db(), "settings", "msg91"), {
@@ -472,6 +491,33 @@ export default function SettingsPage() {
             <p className="text-xs text-[var(--muted)] mt-1">
               Numeric Pixel ID from Meta Events Manager. Leave blank to disable Meta Pixel
               entirely on the consumer site — no script will load and no events will fire.
+            </p>
+          </div>
+        </div>
+
+        {/* Checkout — homepage default plan */}
+        <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-6 space-y-4">
+          <h2 className="text-lg font-semibold">Checkout</h2>
+          <div>
+            <label className="block text-sm font-medium mb-2">Default homepage plan</label>
+            <select
+              value={defaultPlanId}
+              onChange={(e) => setDefaultPlanId(e.target.value)}
+              disabled={activePlans.length === 0}
+              className="w-full bg-[var(--background)] border border-[var(--border)] text-white rounded-lg px-3 py-3 text-sm disabled:opacity-50"
+            >
+              <option value="">
+                {activePlans.length === 0 ? "No active plans" : "— None (send visitors to the plans page) —"}
+              </option>
+              {activePlans.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} — ₹{p.price}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-[var(--muted)] mt-1">
+              Shown in the homepage quick-checkout (default plan + phone + inline payment, no page
+              leave). Leave as None to send visitors to the full plans page instead. Remember to Save.
             </p>
           </div>
         </div>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { collection, query, where, limit, getDocs } from "firebase/firestore";
 import { db } from "@bistar/firebase-config";
 import { useAuth } from "@/lib/auth-context";
+import { HomeQuickCheckout } from "@/components/home-quick-checkout";
 
 /**
  * Logged-out / non-subscribed landing shown by the home page's SubscriptionGate.
@@ -14,7 +15,7 @@ import { useAuth } from "@/lib/auth-context";
  * a gold-tinted edge mask. Background image is optional (drop one at
  * apps/web/public/landing-bg.jpg) — a layered warm gradient stands in until then.
  */
-export function LandingHero() {
+export function LandingHero({ defaultPlanId }: { defaultPlanId?: string }) {
   const { firebaseUser } = useAuth();
   const [posters, setPosters] = useState<string[]>([]);
 
@@ -39,6 +40,20 @@ export function LandingHero() {
   }, []);
 
   const strip = posters.length > 0 ? [...posters, ...posters] : [];
+
+  // Standard CTA — also the fallback the quick-checkout shows when no valid
+  // default plan is configured.
+  const subscribeNow = (
+    <Link
+      href="/plans"
+      className="btn-gold inline-flex items-center gap-2 px-12 py-4 font-semibold rounded-xl text-lg"
+    >
+      Subscribe Now
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+      </svg>
+    </Link>
+  );
 
   return (
     <div className="relative w-full overflow-hidden min-h-[calc(100svh_-_4rem)]">
@@ -75,15 +90,7 @@ export function LandingHero() {
           </p>
 
           <div className="flex flex-col items-center gap-4 animate-fade-in">
-            <Link
-              href="/plans"
-              className="btn-gold inline-flex items-center gap-2 px-12 py-4 font-semibold rounded-xl text-lg"
-            >
-              Subscribe Now
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-              </svg>
-            </Link>
+            <HomeQuickCheckout defaultPlanId={defaultPlanId ?? ""} fallback={subscribeNow} />
             {!firebaseUser && (
               <Link
                 href="/auth/login"
