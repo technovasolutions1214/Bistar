@@ -66,10 +66,25 @@ export function LandingHero({
     <div className="relative w-full overflow-hidden min-h-[calc(100svh_-_4rem)]">
       {/* Cinematic background: optional image with a slow zoom, over layered
        * warm gradients that always look intentional even with no image. */}
-      <div
-        className="absolute inset-0 bg-cover bg-center animate-kenburns"
-        style={{ backgroundImage: `url('${landingBg || "/landing-bg.jpg"}')` }}
-      />
+      {/* Background. An admin-uploaded image is served optimized (resized to the
+          viewport, WebP, cached) via next/image; the static file stands in until
+          one is uploaded. */}
+      {landingBg ? (
+        <Image
+          src={landingBg}
+          alt=""
+          aria-hidden
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover animate-kenburns"
+        />
+      ) : (
+        <div
+          className="absolute inset-0 bg-cover bg-center animate-kenburns"
+          style={{ backgroundImage: "url('/landing-bg.jpg')" }}
+        />
+      )}
       <div className="absolute inset-0 bg-[#0a0807]/80" />
       <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0a0807]/40 to-[var(--background)]" />
       {/* Gold glow pooling behind the headline */}

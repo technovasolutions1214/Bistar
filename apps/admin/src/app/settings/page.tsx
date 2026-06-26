@@ -25,6 +25,31 @@ interface AdminUser {
   displayName?: string;
 }
 
+// Downscale + WebP-compress a background image in the browser before upload, so
+// the stored original is web-sized regardless of what the admin picks (the hero
+// is also served optimized via next/image). Falls back to the original file on
+// any failure (older browsers, decode errors).
+async function optimizeBackground(file: File, maxW = 1920, quality = 0.82): Promise<Blob> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxW / bitmap.width);
+    const w = Math.max(1, Math.round(bitmap.width * scale));
+    const h = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/webp", quality));
+    // Keep the optimized version only if it actually came out smaller.
+    return blob && blob.size < file.size ? blob : file;
+  } catch {
+    return file;
+  }
+}
+
 export default function SettingsPage() {
   const toast = useToast();
   const { firebaseUser } = useAuth();
@@ -243,11 +268,15 @@ export default function SettingsPage() {
         });
       }
 
-      // Upload landing-page background if changed
+      // Upload landing-page background if changed — downscaled + WebP-compressed
+      // client-side first so the stored original is web-sized.
       let landingBgUrl = existingLandingBg;
       if (landingBgFile) {
+        const optimized = await optimizeBackground(landingBgFile);
         const bgRef = ref(storage(), `settings/landing-bg_${Date.now()}`);
-        const task = uploadBytesResumable(bgRef, landingBgFile);
+        const task = uploadBytesResumable(bgRef, optimized, {
+          contentType: optimized.type || landingBgFile.type || "image/webp",
+        });
         await new Promise<void>((resolve, reject) => {
           task.on("state_changed", null, reject, async () => {
             landingBgUrl = await getDownloadURL(task.snapshot.ref);
