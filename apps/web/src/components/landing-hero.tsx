@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { collection, query, where, limit, getDocs } from "firebase/firestore";
 import { db } from "@bistar/firebase-config";
 import { useAuth } from "@/lib/auth-context";
@@ -30,7 +31,7 @@ export function LandingHero({
     (async () => {
       try {
         const snap = await getDocs(
-          query(collection(db(), "content"), where("status", "==", "published"), limit(24)),
+          query(collection(db(), "content"), where("status", "==", "published"), limit(16)),
         );
         const urls = snap.docs
           .map((d) => (d.data() as { thumbnail?: string }).thumbnail)
@@ -132,15 +133,15 @@ export function LandingHero({
           <div className="w-full overflow-hidden pb-10 pt-6 [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]">
             <div className="flex w-max gap-4 animate-marquee px-2">
               {strip.map((src, i) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <div
                   key={i}
-                  src={src}
-                  alt=""
                   aria-hidden="true"
-                  loading="lazy"
-                  className="h-44 sm:h-52 aspect-[2/3] object-cover rounded-xl border border-white/5 shadow-xl shadow-black/60 flex-shrink-0 transition-transform hover:scale-[1.04]"
-                />
+                  className="relative h-44 sm:h-52 aspect-[2/3] rounded-xl overflow-hidden border border-white/5 shadow-xl shadow-black/60 flex-shrink-0 transition-transform hover:scale-[1.04]"
+                >
+                  {/* Decorative poster — served small (~160px) + lazy via next/image
+                      instead of the full-size thumbnail, so the landing stays light. */}
+                  <Image src={src} alt="" aria-hidden fill sizes="160px" className="object-cover" />
+                </div>
               ))}
             </div>
           </div>

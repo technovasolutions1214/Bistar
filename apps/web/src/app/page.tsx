@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import {
   collection,
   query,
@@ -16,10 +17,19 @@ import {
 import { db } from "@bistar/firebase-config";
 import { Skeleton } from "@bistar/ui";
 import type { Content, SiteSettings } from "@bistar/shared";
-import { ContentCarousel } from "@/components/content-carousel";
-import { SeriesInfiniteGrid } from "@/components/series-infinite-grid";
 import { SubscriptionGate } from "@/components/subscription-gate";
 import { LandingHero } from "@/components/landing-hero";
+
+// Below-the-fold content sections — code-split so their JS isn't in the initial
+// bundle. First-time visitors hit the gated LandingHero and never load these.
+const ContentCarousel = dynamic(
+  () => import("@/components/content-carousel").then((m) => m.ContentCarousel),
+  { ssr: false },
+);
+const SeriesInfiniteGrid = dynamic(
+  () => import("@/components/series-infinite-grid").then((m) => m.SeriesInfiniteGrid),
+  { ssr: false },
+);
 
 interface GeneralSettings {
   requireSubscriptionToBrowse?: boolean;
@@ -142,6 +152,7 @@ export default function HomePage() {
             src={hero.banner || hero.thumbnail}
             alt={hero.title}
             fill
+            sizes="100vw"
             className="object-cover"
             priority
           />
