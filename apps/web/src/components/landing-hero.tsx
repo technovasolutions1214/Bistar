@@ -85,13 +85,13 @@ export function LandingHero({
           style={{ backgroundImage: "url('/landing-bg.jpg')" }}
         />
       )}
-      <div className="absolute inset-0 bg-[#0a0807]/65" />
+      <div className="absolute inset-0 bg-[#0a0807]/45" />
       <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0a0807]/40 to-[var(--background)]" />
       {/* Gold glow pooling behind the headline */}
       <div className="absolute left-1/2 top-[34%] -translate-x-1/2 -translate-y-1/2 h-[420px] w-[820px] max-w-[90vw] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(230,174,74,0.18),transparent_70%)] blur-2xl" />
 
       <div className="relative z-10 flex flex-col min-h-[calc(100svh_-_4rem)]">
-        <div className="flex-1 flex flex-col items-center justify-start pt-36 sm:pt-44 text-center px-6">
+        <div className="flex-1 flex flex-col items-center justify-start pt-44 sm:pt-56 text-center px-6">
           <div className="flex flex-col items-center gap-4 animate-fade-in">
             <HomeQuickCheckout defaultPlanId={defaultPlanId ?? ""} fallback={subscribeNow} />
             {!firebaseUser && (
