@@ -252,7 +252,7 @@ export function HomeQuickCheckout({
 
   return (
     <div className="w-full max-w-md text-left">
-      <div className="glass rounded-2xl border border-[var(--border)] overflow-hidden">
+      <div className="bg-[#0a0807]/70 rounded-2xl border border-[var(--border)] overflow-hidden">
         {/* Plan summary header */}
         <div className="px-5 py-4 border-b border-[var(--border)] flex items-baseline justify-between gap-3">
           <div>

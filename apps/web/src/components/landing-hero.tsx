@@ -91,7 +91,7 @@ export function LandingHero({
       <div className="absolute left-1/2 top-[34%] -translate-x-1/2 -translate-y-1/2 h-[420px] w-[820px] max-w-[90vw] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(230,174,74,0.18),transparent_70%)] blur-2xl" />
 
       <div className="relative z-10 flex flex-col min-h-[calc(100svh_-_4rem)]">
-        <div className="flex-1 flex flex-col items-center justify-start pt-24 sm:pt-28 text-center px-6">
+        <div className="flex-1 flex flex-col items-center justify-start pt-36 sm:pt-44 text-center px-6">
           <div className="flex flex-col items-center gap-4 animate-fade-in">
             <HomeQuickCheckout defaultPlanId={defaultPlanId ?? ""} fallback={subscribeNow} />
             {!firebaseUser && (
