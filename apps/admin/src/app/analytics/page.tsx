@@ -64,18 +64,22 @@ async function fetchLiveDeltas(istDateStr: string): Promise<LiveDeltas> {
       where("subscription.startDate", "<", end),
     ),
   );
+  // Range on the single `createdAt` field (auto-indexed) and filter status in
+  // code — no composite index, matching the marketing dashboard. The old
+  // `status == success` + `completedAt` range needed an uncreated composite
+  // index and a `completedAt` field that transactions never carry, so it failed.
   const txnsSnap = await getDocs(
     query(
       collection(db(), "transactions"),
-      where("status", "==", "success"),
-      where("completedAt", ">=", start),
-      where("completedAt", "<", end),
+      where("createdAt", ">=", start),
+      where("createdAt", "<", end),
     ),
   );
   let revenue = 0;
   let revenueCurrency = "INR";
   txnsSnap.forEach((d) => {
-    const data = d.data() as { amount?: number; currency?: string };
+    const data = d.data() as { amount?: number; currency?: string; status?: string };
+    if (data.status !== "success") return;
     revenue += Number(data.amount ?? 0);
     if (data.currency) revenueCurrency = data.currency;
   });

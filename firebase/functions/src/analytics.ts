@@ -61,16 +61,23 @@ export async function computeAndStoreDailyAnalytics(istDateStr: string): Promise
     .get();
   const newSubscriptions = newSubsSnap.data().count;
 
+  // Revenue for this IST day: transactions created in the window that succeeded.
+  // Range on the single `createdAt` field (auto-indexed) and filter status in
+  // code — the same pattern the marketing dashboard uses — so this needs no
+  // composite index. The former `status == success` + `completedAt` range
+  // required a transactions(status, completedAt) composite index that was never
+  // created AND a `completedAt` field that transactions never carry, so it threw
+  // FAILED_PRECONDITION every night and no analytics/{date} doc was ever written.
   const revenueSnap = await db
     .collection("transactions")
-    .where("status", "==", "success")
-    .where("completedAt", ">=", startTs)
-    .where("completedAt", "<", endTs)
+    .where("createdAt", ">=", startTs)
+    .where("createdAt", "<", endTs)
     .get();
   let revenue = 0;
   let revenueCurrency = "INR";
   for (const t of revenueSnap.docs) {
     const data = t.data();
+    if (data.status !== "success") continue;
     revenue += Number(data.amount ?? 0);
     if (data.currency) revenueCurrency = data.currency;
   }
