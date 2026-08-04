@@ -74,11 +74,36 @@ export function captureAttribution(resolved?: { pixelSlug?: string; pixelId?: st
   writeCookie(ATTR_COOKIE, JSON.stringify(attr));
 }
 
-/** The full attribution bundle to send to the server at checkout. */
-export function getAttribution(): Attribution & { fbp?: string; fbc?: string } {
+/**
+ * The full attribution bundle to send to the server at checkout.
+ *
+ * `ua`, `tz` and `lang` are read live off the device rather than the cookie —
+ * they describe the browser making the purchase, not the campaign it arrived
+ * from. The server needs them because Firebase App Hosting's front end rewrites
+ * the User-Agent header to the literal string "Google" and forwards no geo
+ * header at all, so neither the real user agent nor the country survives the
+ * trip to the API route. Meta's CAPI scores match quality on both.
+ */
+export function getAttribution(): Attribution & {
+  fbp?: string;
+  fbc?: string;
+  ua?: string;
+  tz?: string;
+  lang?: string;
+} {
+  let tz: string | undefined;
+  try {
+    tz = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    tz = undefined;
+  }
+
   return {
     ...readStored(),
     fbp: readCookie("_fbp"),
     fbc: readCookie("_fbc"),
+    ua: typeof navigator !== "undefined" ? navigator.userAgent : undefined,
+    tz,
+    lang: typeof navigator !== "undefined" ? navigator.language : undefined,
   };
 }

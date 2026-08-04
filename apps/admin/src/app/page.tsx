@@ -1,276 +1,370 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { collection, query, orderBy, limit, getDocs } from "firebase/firestore";
+import {
+  collection,
+  getCountFromServer,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  Timestamp,
+  where,
+} from "firebase/firestore";
 import { db } from "@bistar/firebase-config";
 import { AdminLayout } from "@/components/admin-layout";
-import { Card, Button, Loader } from "@bistar/ui";
+import { ErrorBanner, LiveStatus, Panel, StatCard } from "@/components/analytics-ui";
+import { formatCount, formatMoney, istToday, istTodayMidnightMs } from "@/lib/ist";
 import type { User } from "@bistar/shared";
 
-interface DashboardStats {
-  totalUsers: number;
-  activeSubscriptions: number;
-  totalContent: number;
+// Live overview of the platform. Every figure here is either a Firestore
+// onSnapshot subscription or a server-side count refreshed whenever one of those
+// subscriptions fires, so the dashboard tracks the database in real time.
+//
+// The counts used to come from `getDocs(..., limit(100))` and report the page
+// size as the total, which capped "Total Users" at 100 no matter how many
+// existed. They are aggregation queries now — exact, and one read each.
+
+interface Totals {
+  users: number;
+  activeSubs: number;
+  content: number;
+  published: number;
+}
+
+interface TodayPayments {
+  success: number;
+  failed: number;
+  pending: number;
   revenue: number;
+  currency: string;
 }
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentUsers, setRecentUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [statsError, setStatsError] = useState<string | null>(null);
-  const [usersError, setUsersError] = useState<string | null>(null);
+  const [totals, setTotals] = useState<Totals | null>(null);
+  const [pastRevenue, setPastRevenue] = useState<number | null>(null);
+  const [todayPayments, setTodayPayments] = useState<TodayPayments | null>(null);
+  const [todaySignups, setTodaySignups] = useState<number | null>(null);
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [totalsKey, setTotalsKey] = useState(0);
 
+  const today = istToday();
+
+  const onError = useMemo(
+    () => (scope: string, e: unknown) => {
+      console.error(`Dashboard (${scope}):`, e);
+      setError(e instanceof Error ? e.message : String(e));
+    },
+    [],
+  );
+
+  /* --- recent signups (live) --- */
   useEffect(() => {
-    async function fetchDashboard() {
-      // Fetch stats independently so partial failures don't kill the whole dashboard
-      let totalUsers = 0;
-      let activeSubs = 0;
-      let totalContent = 0;
-      let totalRevenue = 0;
+    const unsub = onSnapshot(
+      query(collection(db(), "users"), orderBy("createdAt", "desc"), limit(8)),
+      (snap) => {
+        setRecentUsers(snap.docs.map((d) => ({ uid: d.id, ...d.data() } as User)));
+        setUpdatedAt(Date.now());
+        // A new signup moves the platform-wide counts too.
+        setTotalsKey((k) => k + 1);
+      },
+      (e) => onError("recent signups", e),
+    );
+    return unsub;
+  }, [onError]);
 
-      // --- Stats section ---
-      try {
-        // Fetch users with a limit for counting
-        const usersQuery = query(
-          collection(db(), "users"),
-          orderBy("createdAt", "desc"),
-          limit(100)
-        );
-        const usersSnap = await getDocs(usersQuery);
-        totalUsers = usersSnap.size;
+  /* --- today's signups (live) --- */
+  useEffect(() => {
+    const start = Timestamp.fromMillis(istTodayMidnightMs());
+    const unsub = onSnapshot(
+      query(collection(db(), "users"), where("createdAt", ">=", start)),
+      (snap) => {
+        setTodaySignups(snap.size);
+        setUpdatedAt(Date.now());
+      },
+      (e) => onError("today's signups", e),
+    );
+    return unsub;
+  }, [onError]);
 
-        usersSnap.forEach((d) => {
-          const data = d.data();
-          if (data.subscription?.status === "active") {
-            activeSubs++;
+  /* --- today's payments (live) --- */
+  useEffect(() => {
+    const start = Timestamp.fromMillis(istTodayMidnightMs());
+    const unsub = onSnapshot(
+      query(collection(db(), "transactions"), where("createdAt", ">=", start)),
+      (snap) => {
+        const t: TodayPayments = { success: 0, failed: 0, pending: 0, revenue: 0, currency: "INR" };
+        snap.forEach((d) => {
+          const x = d.data() as { status?: string; amount?: number; currency?: string };
+          if (x.status === "success") {
+            t.success++;
+            t.revenue += Number(x.amount ?? 0);
+            if (x.currency) t.currency = x.currency;
+          } else if (x.status === "failed" || x.status === "failure") {
+            t.failed++;
+          } else {
+            t.pending++;
           }
         });
+        setTodayPayments(t);
+        setUpdatedAt(Date.now());
+      },
+      (e) => onError("today's payments", e),
+    );
+    return unsub;
+  }, [onError]);
 
-        // Fetch content with a limit for counting
-        const contentQuery = query(
-          collection(db(), "content"),
-          orderBy("createdAt", "desc"),
-          limit(100)
-        );
-        const contentSnap = await getDocs(contentQuery);
-        totalContent = contentSnap.size;
-
-        // Fetch revenue from analytics
-        try {
-          const analyticsSnap = await getDocs(collection(db(), "analytics"));
-          analyticsSnap.forEach((d) => {
-            totalRevenue += d.data().revenue || 0;
-          });
-        } catch {
-          // Analytics may not exist; revenue stays 0
-        }
-
-        setStats({
-          totalUsers,
-          activeSubscriptions: activeSubs,
-          totalContent,
-          revenue: totalRevenue,
+  /* --- all-time revenue base from the daily rollups (live) --- */
+  useEffect(() => {
+    const unsub = onSnapshot(
+      collection(db(), "analytics"),
+      (snap) => {
+        let sum = 0;
+        snap.forEach((d) => {
+          // Today has no rollup yet — it's added live below, so skip it here to
+          // avoid double counting once the aggregator catches up.
+          if (d.id === today) return;
+          sum += Number((d.data() as { revenue?: number }).revenue ?? 0);
         });
-      } catch (err) {
-        console.error("Failed to fetch stats:", err);
-        setStatsError("Failed to load dashboard statistics.");
-      }
+        setPastRevenue(sum);
+        setUpdatedAt(Date.now());
+      },
+      (e) => onError("revenue rollups", e),
+    );
+    return unsub;
+  }, [today, onError]);
 
-      // --- Recent users section ---
+  /* --- exact platform counts, refreshed whenever something moves --- */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
       try {
-        const recentQuery = query(
-          collection(db(), "users"),
-          orderBy("createdAt", "desc"),
-          limit(10)
-        );
-        const recentSnap = await getDocs(recentQuery);
-        const users = recentSnap.docs.map(
-          (d) => ({ uid: d.id, ...d.data() } as User)
-        );
-        setRecentUsers(users);
-      } catch (err) {
-        console.error("Failed to fetch recent users:", err);
-        setUsersError("Failed to load recent users.");
+        const [u, s, c, p] = await Promise.all([
+          getCountFromServer(collection(db(), "users")),
+          getCountFromServer(query(collection(db(), "users"), where("subscription.status", "==", "active"))),
+          getCountFromServer(collection(db(), "content")),
+          getCountFromServer(query(collection(db(), "content"), where("status", "==", "published"))),
+        ]);
+        if (cancelled) return;
+        setTotals({
+          users: u.data().count,
+          activeSubs: s.data().count,
+          content: c.data().count,
+          published: p.data().count,
+        });
+        setUpdatedAt(Date.now());
+      } catch (e) {
+        if (!cancelled) onError("platform totals", e);
       }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [totalsKey, onError]);
 
-      setLoading(false);
-    }
+  const allTimeRevenue =
+    pastRevenue == null || todayPayments == null ? null : pastRevenue + todayPayments.revenue;
+  const currency = todayPayments?.currency ?? "INR";
 
-    fetchDashboard();
-  }, []);
-
-  const statCards = stats
-    ? [
-        {
-          label: "Total Users",
-          value: stats.totalUsers.toLocaleString(),
-          icon: (
-            <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
-            </svg>
-          ),
-          valueClass: "text-[var(--primary)]",
-          iconBg: "bg-[var(--primary)]/10 text-[var(--primary)]",
-          gradient: "from-[var(--primary)]/5 to-transparent",
-        },
-        {
-          label: "Active Subscriptions",
-          value: stats.activeSubscriptions.toLocaleString(),
-          icon: (
-            <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          ),
-          valueClass: "text-[var(--success)]",
-          iconBg: "bg-[var(--success)]/10 text-[var(--success)]",
-          gradient: "from-[var(--success)]/5 to-transparent",
-        },
-        {
-          label: "Total Content",
-          value: stats.totalContent.toLocaleString(),
-          icon: (
-            <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 01-1.125-1.125M3.375 19.5h1.5C5.496 19.5 6 18.996 6 18.375m-2.625 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-1.5A1.125 1.125 0 0118 18.375" />
-            </svg>
-          ),
-          valueClass: "text-[var(--warning)]",
-          iconBg: "bg-[var(--warning)]/10 text-[var(--warning)]",
-          gradient: "from-[var(--warning)]/5 to-transparent",
-        },
-        {
-          label: "Revenue",
-          value: `$${stats.revenue.toLocaleString()}`,
-          icon: (
-            <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          ),
-          valueClass: "text-[var(--success)]",
-          iconBg: "bg-[var(--success)]/10 text-[var(--success)]",
-          gradient: "from-[var(--success)]/5 to-transparent",
-        },
-      ]
-    : [];
+  const attemptsToday = todayPayments
+    ? todayPayments.success + todayPayments.failed + todayPayments.pending
+    : 0;
+  const successRate =
+    todayPayments && attemptsToday ? (todayPayments.success / attemptsToday) * 100 : null;
 
   return (
     <AdminLayout>
-      <div className="space-y-8">
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-          <p className="text-[var(--muted)] mt-1">Overview of your Bistar platform</p>
+      <div className="space-y-6">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+            <p className="mt-1 text-sm text-[var(--muted)]">
+              Live overview of your Bistar platform · {today} IST
+            </p>
+          </div>
+          <LiveStatus updatedAt={updatedAt} live={!error} error={error} />
         </div>
 
-        {loading ? (
-          <div className="flex justify-center py-20">
-            <Loader />
-          </div>
-        ) : (
-          <>
-            {/* Stat Cards */}
-            {statsError ? (
-              <div className="bg-[var(--danger)]/10 border border-[var(--danger)]/20 rounded-xl p-6 text-center">
-                <p className="text-sm text-[var(--danger)]">{statsError}</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {statCards.map((stat) => (
-                  <div
-                    key={stat.label}
-                    className={`bg-gradient-to-br ${stat.gradient} bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 hover:scale-[1.02] transition-transform duration-200 cursor-default`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-[var(--muted)]">{stat.label}</p>
-                        <p className={`text-2xl font-bold mt-1 ${stat.valueClass}`}>
-                          {stat.value}
-                        </p>
-                      </div>
-                      <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${stat.iconBg}`}>
-                        {stat.icon}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+        {error && <ErrorBanner message={`Some figures couldn't load: ${error}`} />}
 
-            {/* Quick Actions + Recent Users */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Quick Actions */}
-              <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-6">
-                <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
-                <div className="space-y-3">
-                  <Link href="/content/new">
-                    <Button variant="primary" className="w-full justify-start">
-                      <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                      </svg>
-                      Add New Content
-                    </Button>
-                  </Link>
-                  <Link href="/analytics">
-                    <Button variant="secondary" className="w-full justify-start mt-3">
-                      <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75z" />
-                      </svg>
-                      View Analytics
-                    </Button>
-                  </Link>
-                </div>
-              </div>
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatCard
+            label="Total users"
+            value={totals ? formatCount(totals.users) : "—"}
+            hint={todaySignups != null ? `+${formatCount(todaySignups)} today` : undefined}
+            loading={!totals}
+          />
+          <StatCard
+            label="Active subscriptions"
+            value={totals ? formatCount(totals.activeSubs) : "—"}
+            hint={
+              totals && totals.users
+                ? `${((totals.activeSubs / totals.users) * 100).toFixed(1)}% of users`
+                : undefined
+            }
+            tone="success"
+            loading={!totals}
+          />
+          <StatCard
+            label="Published content"
+            value={totals ? formatCount(totals.published) : "—"}
+            hint={totals ? `${formatCount(totals.content)} total titles` : undefined}
+            tone="warning"
+            loading={!totals}
+          />
+          <StatCard
+            label="Revenue (all time)"
+            value={allTimeRevenue == null ? "—" : formatMoney(allTimeRevenue, currency)}
+            hint={
+              todayPayments ? `${formatMoney(todayPayments.revenue, currency)} today` : undefined
+            }
+            tone="success"
+            loading={allTimeRevenue == null}
+          />
+        </div>
 
-              {/* Recent Signups */}
-              <div className="lg:col-span-2 bg-[var(--card)] border border-[var(--border)] rounded-xl p-6">
-                <h2 className="text-lg font-semibold mb-4">Recent Signups</h2>
-                {usersError ? (
-                  <div className="bg-[var(--danger)]/10 border border-[var(--danger)]/20 rounded-lg p-4 text-center">
-                    <p className="text-sm text-[var(--danger)]">{usersError}</p>
-                  </div>
-                ) : (
-                <div className="divide-y divide-[var(--border)]">
-                  {recentUsers.length === 0 ? (
-                    <p className="text-[var(--muted)] text-sm py-6 text-center">No users yet.</p>
-                  ) : (
-                    recentUsers.map((user) => (
-                      <Link
-                        key={user.uid}
-                        href={`/users/${user.uid}`}
-                        className="flex items-center justify-between py-3 px-2 -mx-2 rounded-lg hover:bg-[var(--card-hover)] transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          {user.photoURL ? (
-                            <img src={user.photoURL} alt="" className="w-9 h-9 rounded-full ring-2 ring-[var(--border)]" />
-                          ) : (
-                            <div className="w-9 h-9 rounded-full bg-[var(--primary)]/20 flex items-center justify-center text-sm font-medium text-[var(--primary)] ring-2 ring-[var(--border)]">
-                              {user.displayName?.charAt(0) || "U"}
-                            </div>
-                          )}
-                          <div>
-                            <p className="text-sm font-medium">{user.displayName}</p>
-                            <p className="text-xs text-[var(--muted)]">{user.email}</p>
-                          </div>
-                        </div>
-                        <span
-                          className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                            user.subscription?.status === "active"
-                              ? "bg-[var(--success)]/10 text-[var(--success)]"
-                              : "bg-[var(--muted)]/10 text-[var(--muted)]"
-                          }`}
-                        >
-                          {user.subscription?.status || "Free"}
-                        </span>
-                      </Link>
-                    ))
-                  )}
-                </div>
-                )}
-              </div>
+        {/* Today's payment funnel — where checkouts actually end up. */}
+        <Panel
+          title="Payments today"
+          subtitle="Every checkout started since IST midnight"
+          actions={
+            successRate != null ? (
+              <span className="text-xs text-[var(--muted)]">
+                {successRate.toFixed(0)}% success rate
+              </span>
+            ) : null
+          }
+        >
+          {!todayPayments || attemptsToday === 0 ? (
+            <div className="px-5 py-8 text-center text-sm text-[var(--muted)]">
+              No checkouts started today yet.
             </div>
-          </>
-        )}
+          ) : (
+            <div className="grid grid-cols-3 divide-x divide-[var(--border)]">
+              <FunnelCell label="Successful" value={todayPayments.success} color="var(--success)" total={attemptsToday} />
+              <FunnelCell label="Pending" value={todayPayments.pending} color="var(--warning)" total={attemptsToday} />
+              <FunnelCell label="Failed" value={todayPayments.failed} color="var(--danger)" total={attemptsToday} />
+            </div>
+          )}
+        </Panel>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <Panel title="Quick actions" bodyClassName="p-5">
+            <div className="space-y-2.5">
+              <QuickAction href="/content/new" label="Add new content" primary />
+              <QuickAction href="/analytics" label="View analytics" />
+              <QuickAction href="/marketing" label="Marketing & attribution" />
+              <QuickAction href="/users" label="Manage users" />
+            </div>
+          </Panel>
+
+          <Panel
+            className="lg:col-span-2"
+            title="Recent signups"
+            actions={
+              <Link
+                href="/users"
+                className="rounded-lg px-2 py-1 text-xs font-medium text-[var(--muted)] transition-colors hover:bg-[var(--card-hover)] hover:text-[var(--foreground)]"
+              >
+                View all
+              </Link>
+            }
+          >
+            {recentUsers.length === 0 ? (
+              <p className="px-5 py-8 text-center text-sm text-[var(--muted)]">No users yet.</p>
+            ) : (
+              <ul className="divide-y divide-[var(--border)]">
+                {recentUsers.map((user) => (
+                  <li key={user.uid}>
+                    <Link
+                      href={`/users/${user.uid}`}
+                      className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-[var(--card-hover)]"
+                    >
+                      <span className="flex min-w-0 items-center gap-3">
+                        {user.photoURL ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={user.photoURL}
+                            alt=""
+                            className="h-9 w-9 rounded-full ring-2 ring-[var(--border)]"
+                          />
+                        ) : (
+                          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--primary)]/20 text-sm font-medium text-[var(--primary)] ring-2 ring-[var(--border)]">
+                            {user.displayName?.charAt(0) || "U"}
+                          </span>
+                        )}
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium">
+                            {user.displayName || "Unnamed"}
+                          </span>
+                          <span className="block truncate text-xs text-[var(--muted)]">
+                            {user.email || user.phone || user.uid}
+                          </span>
+                        </span>
+                      </span>
+                      <span
+                        className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
+                          user.subscription?.status === "active"
+                            ? "bg-[var(--success)]/10 text-[var(--success)]"
+                            : "bg-[var(--muted)]/10 text-[var(--muted)]"
+                        }`}
+                      >
+                        {user.subscription?.status || "Free"}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+        </div>
       </div>
     </AdminLayout>
+  );
+}
+
+function FunnelCell({
+  label,
+  value,
+  color,
+  total,
+}: {
+  label: string;
+  value: number;
+  color: string;
+  total: number;
+}) {
+  const pct = total ? (value / total) * 100 : 0;
+  return (
+    <div className="px-5 py-4">
+      <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">{label}</p>
+      <p className="mt-1 text-2xl font-bold tabular-nums" style={{ color }}>
+        {formatCount(value)}
+      </p>
+      <span className="mt-2 block h-1.5 w-full overflow-hidden rounded-full bg-[var(--border)]">
+        <span className="block h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
+      </span>
+      <p className="mt-1 text-xs tabular-nums text-[var(--muted)]">{pct.toFixed(0)}% of attempts</p>
+    </div>
+  );
+}
+
+function QuickAction({ href, label, primary }: { href: string; label: string; primary?: boolean }) {
+  return (
+    <Link
+      href={href}
+      className={`flex items-center justify-between rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
+        primary
+          ? "bg-[var(--primary)] text-[var(--on-primary)] hover:bg-[var(--primary-hover)]"
+          : "border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--card-hover)]"
+      }`}
+    >
+      {label}
+      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+      </svg>
+    </Link>
   );
 }

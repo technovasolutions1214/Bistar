@@ -70,6 +70,11 @@ service cloud.firestore {
 
     match /content/{contentId} {
       allow read: if resource.data.status == "published" || isAdmin();
+      // Explicit list rule so admin collection queries — including
+      // getCountFromServer() on the dashboard/analytics panels — resolve without
+      // depending on `resource`, which aggregation queries can't inspect.
+      // Mirrors the users rule below.
+      allow list: if isAdmin();
       allow create, update, delete: if isAdmin();
 
       match /videos/{videoId} {

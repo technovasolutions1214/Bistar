@@ -1,383 +1,546 @@
 "use client";
-import React, { useEffect, useState, useMemo, useCallback } from "react";
-import {
-  collection,
-  getDocs,
-  query,
-  where,
-  orderBy,
-  Timestamp,
-  getCountFromServer,
-} from "firebase/firestore";
+import React, { useEffect, useMemo, useState } from "react";
+import { collection, getCountFromServer, onSnapshot, orderBy, query, Timestamp, where } from "firebase/firestore";
 import { db } from "@bistar/firebase-config";
 import { AdminLayout } from "@/components/admin-layout";
-import { Button, Loader } from "@bistar/ui";
+import {
+  DailyBarChart,
+  DayCell,
+  EmptyState,
+  ErrorBanner,
+  LiveStatus,
+  Panel,
+  RangeTabs,
+  SkeletonCards,
+  SkeletonPanel,
+  StatCard,
+} from "@/components/analytics-ui";
+import {
+  addDays,
+  DAY_MS,
+  daysDescending,
+  formatCount,
+  formatMoney,
+  istMidnightMs,
+  istToday,
+  percentChange,
+} from "@/lib/ist";
 import type { AnalyticsEntry } from "@bistar/shared";
 
-type DateRange = "7d" | "30d" | "custom";
+// ---------------------------------------------------------------------------
+// Platform analytics.
+//
+// Past IST days come from the nightly `analytics/{date}` rollups; the days the
+// aggregator hasn't reached yet (today, and yesterday if it hasn't run) are
+// computed live from Firestore. Everything is an onSnapshot subscription, so
+// signups, subscriptions and revenue appear as they happen.
+//
+// Every day in the selected range is rendered, so today is always visible and a
+// quiet day reads as an explicit zero rather than a missing row.
+//
+// Revenue here is bucketed on the day the transaction was CREATED. The Marketing
+// panel buckets conversions on the day the payment was CONFIRMED, so the two can
+// differ by a day for payments that straddle IST midnight.
+// ---------------------------------------------------------------------------
 
-const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+const RANGES = [
+  { key: "7", label: "7 days" },
+  { key: "30", label: "30 days" },
+  { key: "90", label: "90 days" },
+  { key: "custom", label: "Custom" },
+] as const;
+type RangeKey = (typeof RANGES)[number]["key"];
 
-// IST calendar date for a given instant, formatted YYYY-MM-DD.
-function istDateString(d: Date): string {
-  return new Date(d.getTime() + IST_OFFSET_MS).toISOString().slice(0, 10);
-}
-
-// IST midnight (00:00 +05:30) on a given IST date, returned as a UTC instant.
-function istMidnightUtc(istDateStr: string): Date {
-  return new Date(`${istDateStr}T00:00:00+05:30`);
-}
-
-function formatRangeDate(d: Date): string {
-  return istDateString(d);
-}
-
-function todayIst(): string {
-  return istDateString(new Date());
-}
-
-function yesterdayIst(): string {
-  return istDateString(new Date(Date.now() - 24 * 60 * 60 * 1000));
-}
-
-interface LiveDeltas {
+interface LiveDay {
   newUsers: number;
   newSubscriptions: number;
   revenue: number;
   revenueCurrency: string;
 }
 
-const ZERO_DELTAS: LiveDeltas = { newUsers: 0, newSubscriptions: 0, revenue: 0, revenueCurrency: "INR" };
+/**
+ * Live values for a single IST day, straight off Firestore. Used for days the
+ * nightly aggregator hasn't written yet — without this, "today" simply had no
+ * row and the panel looked a day behind.
+ */
+function useLiveDay(date: string | null, onError: (scope: string, e: unknown) => void): LiveDay | null {
+  const [value, setValue] = useState<LiveDay | null>(null);
 
-// Live count for one IST day. Used for "Today", since the aggregator hasn't run yet.
-async function fetchLiveDeltas(istDateStr: string): Promise<LiveDeltas> {
-  const start = Timestamp.fromDate(istMidnightUtc(istDateStr));
-  const end = Timestamp.fromDate(new Date(istMidnightUtc(istDateStr).getTime() + 24 * 60 * 60 * 1000));
+  useEffect(() => {
+    if (!date) {
+      setValue(null);
+      return;
+    }
+    const startMs = istMidnightMs(date);
+    const start = Timestamp.fromMillis(startMs);
+    const end = Timestamp.fromMillis(startMs + DAY_MS);
 
-  const newUsersSnap = await getCountFromServer(
-    query(collection(db(), "users"), where("createdAt", ">=", start), where("createdAt", "<", end)),
-  );
-  const newSubsSnap = await getCountFromServer(
-    query(
-      collection(db(), "users"),
-      where("subscription.startDate", ">=", start),
-      where("subscription.startDate", "<", end),
-    ),
-  );
-  // Range on the single `createdAt` field (auto-indexed) and filter status in
-  // code — no composite index, matching the marketing dashboard. The old
-  // `status == success` + `completedAt` range needed an uncreated composite
-  // index and a `completedAt` field that transactions never carry, so it failed.
-  const txnsSnap = await getDocs(
-    query(
-      collection(db(), "transactions"),
-      where("createdAt", ">=", start),
-      where("createdAt", "<", end),
-    ),
-  );
-  let revenue = 0;
-  let revenueCurrency = "INR";
-  txnsSnap.forEach((d) => {
-    const data = d.data() as { amount?: number; currency?: string; status?: string };
-    if (data.status !== "success") return;
-    revenue += Number(data.amount ?? 0);
-    if (data.currency) revenueCurrency = data.currency;
-  });
+    const acc: LiveDay = { newUsers: 0, newSubscriptions: 0, revenue: 0, revenueCurrency: "INR" };
+    const publish = () => setValue({ ...acc });
 
-  return {
-    newUsers: newUsersSnap.data().count,
-    newSubscriptions: newSubsSnap.data().count,
-    revenue,
-    revenueCurrency,
-  };
+    const unsubs = [
+      onSnapshot(
+        query(collection(db(), "users"), where("createdAt", ">=", start), where("createdAt", "<", end)),
+        (snap) => {
+          acc.newUsers = snap.size;
+          publish();
+        },
+        (e) => onError("new users", e),
+      ),
+      onSnapshot(
+        query(
+          collection(db(), "users"),
+          where("subscription.startDate", ">=", start),
+          where("subscription.startDate", "<", end),
+        ),
+        (snap) => {
+          acc.newSubscriptions = snap.size;
+          publish();
+        },
+        (e) => onError("new subscriptions", e),
+      ),
+      // Range on the single `createdAt` field (auto-indexed) and filter status in
+      // code, so this needs no composite index — the same shape the nightly
+      // aggregator uses.
+      onSnapshot(
+        query(collection(db(), "transactions"), where("createdAt", ">=", start), where("createdAt", "<", end)),
+        (snap) => {
+          let sum = 0;
+          snap.forEach((d) => {
+            const x = d.data() as { status?: string; amount?: number; currency?: string };
+            if (x.status !== "success") return;
+            sum += Number(x.amount ?? 0);
+            if (x.currency) acc.revenueCurrency = x.currency;
+          });
+          acc.revenue = sum;
+          publish();
+        },
+        (e) => onError("revenue", e),
+      ),
+    ];
+    return () => unsubs.forEach((f) => f());
+  }, [date, onError]);
+
+  return value;
 }
 
-function formatMoney(amount: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 0 }).format(amount);
-  } catch {
-    return `${currency} ${amount.toLocaleString()}`;
-  }
-}
-
-export default function AnalyticsPage() {
-  const [entries, setEntries] = useState<AnalyticsEntry[]>([]);
-  const [loadingEntries, setLoadingEntries] = useState(true);
-  const [range, setRange] = useState<DateRange>("30d");
-  const [customStart, setCustomStart] = useState(formatRangeDate(new Date(Date.now() - 30 * 86400000)));
-  const [customEnd, setCustomEnd] = useState(formatRangeDate(new Date()));
-
-  const [today, setToday] = useState<LiveDeltas>(ZERO_DELTAS);
-  const [yesterday, setYesterday] = useState<LiveDeltas>(ZERO_DELTAS);
-  const [loadingLive, setLoadingLive] = useState(true);
-
-  const todayDate = todayIst();
-  const yesterdayDate = yesterdayIst();
-
-  const dateRange = useMemo(() => {
-    if (range === "7d") return { start: formatRangeDate(new Date(Date.now() - 7 * 86400000)), end: formatRangeDate(new Date()) };
-    if (range === "30d") return { start: formatRangeDate(new Date(Date.now() - 30 * 86400000)), end: formatRangeDate(new Date()) };
-    return { start: customStart, end: customEnd };
-  }, [range, customStart, customEnd]);
+/** Platform-wide totals as of right now (not a nightly snapshot). */
+function useLiveTotals(refreshKey: number, onError: (scope: string, e: unknown) => void) {
+  const [totals, setTotals] = useState<{ users: number; activeSubs: number; published: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    async function fetchAnalytics() {
-      setLoadingEntries(true);
+    (async () => {
       try {
-        const q = query(
-          collection(db(), "analytics"),
-          where("date", ">=", dateRange.start),
-          where("date", "<=", dateRange.end),
-          orderBy("date", "asc"),
-        );
-        const snap = await getDocs(q);
+        const [u, s, p] = await Promise.all([
+          getCountFromServer(collection(db(), "users")),
+          getCountFromServer(query(collection(db(), "users"), where("subscription.status", "==", "active"))),
+          getCountFromServer(query(collection(db(), "content"), where("status", "==", "published"))),
+        ]);
         if (cancelled) return;
-        setEntries(snap.docs.map((d) => d.data() as AnalyticsEntry));
-      } catch (err) {
-        console.error("Failed to fetch analytics:", err);
-      } finally {
-        if (!cancelled) setLoadingEntries(false);
+        setTotals({ users: u.data().count, activeSubs: s.data().count, published: p.data().count });
+      } catch (e) {
+        if (!cancelled) onError("platform totals", e);
       }
-    }
-    fetchAnalytics();
+    })();
     return () => {
       cancelled = true;
     };
-  }, [dateRange]);
+  }, [refreshKey, onError]);
 
-  const refreshLive = useCallback(async () => {
-    setLoadingLive(true);
-    try {
-      const [t, y] = await Promise.all([fetchLiveDeltas(todayDate), fetchLiveDeltas(yesterdayDate)]);
-      setToday(t);
-      setYesterday(y);
-    } catch (err) {
-      console.error("Failed to fetch live deltas:", err);
-    } finally {
-      setLoadingLive(false);
+  return totals;
+}
+
+export default function AnalyticsPage() {
+  const today = istToday();
+
+  const [range, setRange] = useState<RangeKey>("30");
+  const [customStart, setCustomStart] = useState(addDays(today, -29));
+  const [customEnd, setCustomEnd] = useState(today);
+
+  const [entries, setEntries] = useState<Record<string, AnalyticsEntry>>({});
+  const [loaded, setLoaded] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [totalsKey, setTotalsKey] = useState(0);
+
+  const onError = useMemo(
+    () => (scope: string, e: unknown) => {
+      console.error(`Analytics (${scope}):`, e);
+      setError(e instanceof Error ? e.message : String(e));
+    },
+    [],
+  );
+
+  // Window + the equal-length window before it, for period-over-period deltas.
+  const { start, end, span, subscribeFrom } = useMemo(() => {
+    if (range === "custom") {
+      const s = customStart <= customEnd ? customStart : customEnd;
+      const e = customStart <= customEnd ? customEnd : customStart;
+      const n = Math.max(1, Math.round((istMidnightMs(e) - istMidnightMs(s)) / DAY_MS) + 1);
+      return { start: s, end: e, span: n, subscribeFrom: addDays(s, -n) };
     }
-  }, [todayDate, yesterdayDate]);
+    const n = Number(range);
+    const s = addDays(today, -(n - 1));
+    return { start: s, end: today, span: n, subscribeFrom: addDays(s, -n) };
+  }, [range, customStart, customEnd, today]);
+
+  /* --- rollups (live) --- */
+  useEffect(() => {
+    setLoaded(false);
+    const unsub = onSnapshot(
+      query(
+        collection(db(), "analytics"),
+        where("date", ">=", subscribeFrom),
+        where("date", "<=", end),
+        orderBy("date", "asc"),
+      ),
+      (snap) => {
+        const next: Record<string, AnalyticsEntry> = {};
+        snap.forEach((d) => {
+          next[d.id] = d.data() as AnalyticsEntry;
+        });
+        setEntries(next);
+        setLoaded(true);
+        setUpdatedAt(Date.now());
+      },
+      (e) => {
+        onError("daily rollups", e);
+        setLoaded(true);
+      },
+    );
+    return unsub;
+  }, [subscribeFrom, end, onError]);
+
+  // Today is always live. Yesterday goes live too until its rollup lands.
+  const yesterday = addDays(today, -1);
+  const todayLive = useLiveDay(today >= start && today <= end ? today : null, onError);
+  const yesterdayLive = useLiveDay(
+    yesterday >= start && yesterday <= end && !entries[yesterday] ? yesterday : null,
+    onError,
+  );
+  const totals = useLiveTotals(totalsKey, onError);
+
+  // Refresh the platform-wide counts whenever today's signups change, and hourly.
+  useEffect(() => {
+    setTotalsKey((k) => k + 1);
+  }, [todayLive?.newUsers, todayLive?.newSubscriptions]);
+  useEffect(() => {
+    const id = setInterval(() => setTotalsKey((k) => k + 1), 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
-    refreshLive();
-  }, [refreshLive]);
+    if (todayLive) setUpdatedAt(Date.now());
+  }, [todayLive]);
 
-  const latest = entries[entries.length - 1];
-  const snapshotAsOf = latest?.date ?? "no data yet";
+  /* --- merge rollups + live into one day-indexed series --- */
 
-  // Snapshots: latest day in the selected range (do NOT sum these)
-  const snapshotCards = [
-    { label: `Total Users (as of ${snapshotAsOf} IST)`, value: (latest?.totalUsers ?? 0).toLocaleString(), color: "var(--primary)" },
-    { label: `Active Subscriptions (as of ${snapshotAsOf} IST)`, value: (latest?.activeSubscriptions ?? 0).toLocaleString(), color: "var(--warning)" },
-    { label: `Published Content (as of ${snapshotAsOf} IST)`, value: (latest?.totalPublishedContent ?? 0).toLocaleString(), color: "var(--success)" },
-  ];
+  type Row = {
+    date: string;
+    live: boolean;
+    aggregated: boolean;
+    newUsers: number;
+    newSubscriptions: number;
+    revenue: number;
+    totalUsers: number | null;
+    activeSubscriptions: number | null;
+    totalPublishedContent: number | null;
+  };
 
-  // Range deltas: sum across days in the selected range
-  const rangeNewUsers = entries.reduce((acc, e) => acc + (e.newUsers ?? 0), 0);
-  const rangeNewSubs = entries.reduce((acc, e) => acc + (e.newSubscriptions ?? 0), 0);
-  const rangeRevenue = entries.reduce((acc, e) => acc + (e.revenue ?? 0), 0);
-  const rangeRevenueCurrency = entries.find((e) => e.revenueCurrency)?.revenueCurrency ?? "INR";
+  const rowFor = useMemo(
+    () =>
+      (date: string): Row => {
+        const live = date === today ? todayLive : date === yesterday ? yesterdayLive : null;
+        const e = entries[date];
+        if (live) {
+          return {
+            date,
+            live: true,
+            aggregated: false,
+            newUsers: live.newUsers,
+            newSubscriptions: live.newSubscriptions,
+            revenue: live.revenue,
+            // Snapshot columns are taken at IST midnight; they don't exist yet.
+            totalUsers: null,
+            activeSubscriptions: null,
+            totalPublishedContent: null,
+          };
+        }
+        return {
+          date,
+          live: false,
+          aggregated: !!e,
+          newUsers: e?.newUsers ?? 0,
+          newSubscriptions: e?.newSubscriptions ?? 0,
+          revenue: e?.revenue ?? 0,
+          totalUsers: e ? e.totalUsers : null,
+          activeSubscriptions: e ? e.activeSubscriptions : null,
+          totalPublishedContent: e ? e.totalPublishedContent : null,
+        };
+      },
+    [entries, today, yesterday, todayLive, yesterdayLive],
+  );
 
-  const maxRevenue = useMemo(() => Math.max(...entries.map((e) => e.revenue ?? 0), 1), [entries]);
+  const rows = useMemo(() => daysDescending(start, end).map(rowFor), [start, end, rowFor]);
+  const prevRows = useMemo(
+    () => daysDescending(addDays(start, -span), addDays(start, -1)).map(rowFor),
+    [start, span, rowFor],
+  );
+
+  const sum = (rs: Row[], k: "newUsers" | "newSubscriptions" | "revenue") =>
+    rs.reduce((a, r) => a + r[k], 0);
+
+  const cur = {
+    newUsers: sum(rows, "newUsers"),
+    newSubs: sum(rows, "newSubscriptions"),
+    revenue: sum(rows, "revenue"),
+  };
+  const prev = {
+    newUsers: sum(prevRows, "newUsers"),
+    newSubs: sum(prevRows, "newSubscriptions"),
+    revenue: sum(prevRows, "revenue"),
+  };
+
+  const currency = useMemo(
+    () => Object.values(entries).find((e) => e.revenueCurrency)?.revenueCurrency ?? "INR",
+    [entries],
+  );
+
+  const chronological = useMemo(() => [...rows].reverse(), [rows]);
+  const revenueSeries = useMemo(
+    () => chronological.map((r) => ({ date: r.date, value: r.revenue })),
+    [chronological],
+  );
+  const signupSeries = useMemo(
+    () => chronological.map((r) => ({ date: r.date, value: r.newUsers })),
+    [chronological],
+  );
+
+  const missingDays = rows.filter((r) => !r.aggregated && !r.live).length;
+  const comparison = `vs previous ${span} day${span === 1 ? "" : "s"}`;
 
   return (
     <AdminLayout>
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-white">Analytics</h1>
-            <p className="text-[var(--muted)] mt-1">Day boundaries are IST (Asia/Kolkata).</p>
+            <div className="mt-1 flex flex-wrap items-center gap-3">
+              <p className="text-sm text-[var(--muted)]">
+                {start} → {end} · day boundaries are IST (Asia/Kolkata)
+              </p>
+              <LiveStatus updatedAt={updatedAt} live={loaded} error={error} />
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant={range === "7d" ? "primary" : "secondary"} size="sm" onClick={() => setRange("7d")}>7 Days</Button>
-            <Button variant={range === "30d" ? "primary" : "secondary"} size="sm" onClick={() => setRange("30d")}>30 Days</Button>
-            <Button variant={range === "custom" ? "primary" : "secondary"} size="sm" onClick={() => setRange("custom")}>Custom</Button>
-          </div>
+          <RangeTabs options={RANGES} value={range} onChange={setRange} />
         </div>
 
         {range === "custom" && (
-          <div className="flex flex-wrap items-center gap-3 bg-[var(--card)] border border-[var(--border)] rounded-xl p-4">
+          <div className="flex flex-wrap items-end gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
             <div>
-              <label className="block text-xs text-[var(--muted)] mb-1">Start Date (IST)</label>
+              <label htmlFor="start-date" className="mb-1 block text-xs text-[var(--muted)]">
+                Start date (IST)
+              </label>
               <input
+                id="start-date"
                 type="date"
                 value={customStart}
+                max={today}
                 onChange={(e) => setCustomStart(e.target.value)}
-                className="px-3 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                className="rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
               />
             </div>
             <div>
-              <label className="block text-xs text-[var(--muted)] mb-1">End Date (IST)</label>
+              <label htmlFor="end-date" className="mb-1 block text-xs text-[var(--muted)]">
+                End date (IST)
+              </label>
               <input
+                id="end-date"
                 type="date"
                 value={customEnd}
+                max={today}
                 onChange={(e) => setCustomEnd(e.target.value)}
-                className="px-3 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                className="rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
               />
             </div>
+            <p className="pb-2 text-xs text-[var(--muted)]">{span} days selected</p>
           </div>
         )}
 
-        {/* Today / Yesterday — live deltas */}
-        <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Daily Deltas</h2>
-            <Button variant="ghost" size="sm" onClick={refreshLive} disabled={loadingLive}>
-              {loadingLive ? "Refreshing…" : "Refresh"}
-            </Button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <DeltaPair label="New Users" today={today.newUsers.toLocaleString()} yesterday={yesterday.newUsers.toLocaleString()} todayDate={todayDate} yesterdayDate={yesterdayDate} />
-            <DeltaPair label="New Subscriptions" today={today.newSubscriptions.toLocaleString()} yesterday={yesterday.newSubscriptions.toLocaleString()} todayDate={todayDate} yesterdayDate={yesterdayDate} />
-            <DeltaPair label="Revenue" today={formatMoney(today.revenue, today.revenueCurrency)} yesterday={formatMoney(yesterday.revenue, yesterday.revenueCurrency)} todayDate={todayDate} yesterdayDate={yesterdayDate} />
-          </div>
-          <p className="text-xs text-[var(--muted)]">
-            Today and yesterday counts are queried live from Firestore and reflect the IST calendar day. They do not depend on the nightly
-            aggregator. Revenue counts only transactions with <code>status: &quot;success&quot;</code>.
-          </p>
+        {error && <ErrorBanner message={`Couldn't load analytics: ${error}`} />}
+
+        {/* Right now — live platform totals */}
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatCard
+            label="Total users"
+            value={totals ? formatCount(totals.users) : "—"}
+            hint="right now"
+            loading={!totals}
+          />
+          <StatCard
+            label="Active subscriptions"
+            value={totals ? formatCount(totals.activeSubs) : "—"}
+            hint="right now"
+            tone="success"
+            loading={!totals}
+          />
+          <StatCard
+            label="Published content"
+            value={totals ? formatCount(totals.published) : "—"}
+            hint="right now"
+            loading={!totals}
+          />
+          <StatCard
+            label="Today so far"
+            value={todayLive ? formatMoney(todayLive.revenue, todayLive.revenueCurrency) : "—"}
+            hint={
+              todayLive
+                ? `${formatCount(todayLive.newUsers)} signups · ${formatCount(todayLive.newSubscriptions)} subs`
+                : "loading"
+            }
+            tone={todayLive && todayLive.revenue > 0 ? "success" : "default"}
+            loading={!todayLive && today >= start && today <= end}
+          />
         </div>
 
-        {loadingEntries ? (
-          <div className="flex justify-center py-20"><Loader /></div>
+        {!loaded ? (
+          <div className="space-y-6">
+            <SkeletonCards count={3} />
+            <SkeletonPanel rows={6} />
+          </div>
         ) : (
           <>
-            {/* Snapshots — latest day in the range */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {snapshotCards.map((stat) => (
-                <div key={stat.label} className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5">
-                  <p className="text-sm text-[var(--muted)]">{stat.label}</p>
-                  <p className="text-2xl font-bold mt-1" style={{ color: stat.color }}>{stat.value}</p>
-                </div>
-              ))}
+            {/* Range totals with period-over-period deltas */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <StatCard
+                label="New users"
+                value={formatCount(cur.newUsers)}
+                delta={percentChange(cur.newUsers, prev.newUsers)}
+                hint={comparison}
+              />
+              <StatCard
+                label="New subscriptions"
+                value={formatCount(cur.newSubs)}
+                delta={percentChange(cur.newSubs, prev.newSubs)}
+                hint={comparison}
+                tone="warning"
+              />
+              <StatCard
+                label="Revenue"
+                value={formatMoney(cur.revenue, currency)}
+                delta={percentChange(cur.revenue, prev.revenue)}
+                hint={comparison}
+                tone="success"
+              />
             </div>
 
-            {/* Range totals */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <RangeCard label={`New Users · ${dateRange.start} → ${dateRange.end} IST`} value={rangeNewUsers.toLocaleString()} color="var(--success)" />
-              <RangeCard label={`New Subscriptions · ${dateRange.start} → ${dateRange.end} IST`} value={rangeNewSubs.toLocaleString()} color="var(--warning)" />
-              <RangeCard label={`Revenue · ${dateRange.start} → ${dateRange.end} IST`} value={formatMoney(rangeRevenue, rangeRevenueCurrency)} color="var(--success)" />
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <Panel title="Revenue per day" subtitle="By transaction creation date (IST)" bodyClassName="pt-1">
+                <DailyBarChart
+                  data={revenueSeries}
+                  format={(n) => formatMoney(n, currency)}
+                  todayDate={today}
+                  label="Revenue per IST day"
+                />
+              </Panel>
+              <Panel title="New users per day" subtitle="Signups by IST calendar day" bodyClassName="pt-1">
+                <DailyBarChart
+                  data={signupSeries}
+                  format={(n) => `${formatCount(n)} signup${n === 1 ? "" : "s"}`}
+                  todayDate={today}
+                  label="New users per IST day"
+                />
+              </Panel>
             </div>
 
-            {/* Revenue chart */}
-            <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-6">
-              <h2 className="text-lg font-semibold mb-4">Revenue per Day (IST)</h2>
-              {entries.length === 0 ? (
-                <p className="text-[var(--muted)] text-sm text-center py-8">No data for the selected period.</p>
+            <Panel
+              title="Daily breakdown (IST)"
+              actions={
+                <span className="text-xs text-[var(--muted)]">
+                  {rows.length} day{rows.length === 1 ? "" : "s"}
+                </span>
+              }
+            >
+              {rows.length === 0 ? (
+                <EmptyState title="No days in this range." />
               ) : (
-                <div className="space-y-4">
-                  <div className="flex items-end gap-1 h-48">
-                    {entries.map((entry) => (
-                      <div
-                        key={entry.date}
-                        className="flex-1 flex flex-col items-center justify-end h-full"
-                        title={`${entry.date} IST: ${formatMoney(entry.revenue ?? 0, entry.revenueCurrency ?? rangeRevenueCurrency)}`}
-                      >
-                        <div
-                          className="w-full rounded-t bg-[var(--primary)] hover:bg-[var(--primary-hover)] transition-colors min-h-[2px]"
-                          style={{ height: `${((entry.revenue ?? 0) / maxRevenue) * 100}%` }}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex justify-between text-xs text-[var(--muted)]">
-                    <span>{entries[0]?.date}</span>
-                    {entries.length > 2 && <span>{entries[Math.floor(entries.length / 2)]?.date}</span>}
-                    <span>{entries[entries.length - 1]?.date}</span>
-                  </div>
+                <div className="max-h-[520px] overflow-auto">
+                  <table className="w-full min-w-[860px] text-sm">
+                    <caption className="sr-only">Per-day users, subscriptions and revenue</caption>
+                    <thead className="sticky top-0 z-10 bg-[var(--card)]">
+                      <tr className="text-left text-xs text-[var(--muted)]">
+                        <th scope="col" className="border-b border-[var(--border)] px-5 py-2.5 font-medium">Date</th>
+                        <th scope="col" className="border-b border-[var(--border)] px-3 py-2.5 text-right font-medium">New users</th>
+                        <th scope="col" className="border-b border-[var(--border)] px-3 py-2.5 text-right font-medium">New subs</th>
+                        <th scope="col" className="border-b border-[var(--border)] px-3 py-2.5 text-right font-medium">Revenue</th>
+                        <th scope="col" className="border-b border-[var(--border)] px-3 py-2.5 text-right font-medium">Total users</th>
+                        <th scope="col" className="border-b border-[var(--border)] px-3 py-2.5 text-right font-medium">Active subs</th>
+                        <th scope="col" className="border-b border-[var(--border)] px-5 py-2.5 text-right font-medium">Published</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((r) => {
+                        const dim = !r.aggregated && !r.live;
+                        const muted = (v: number) => (v ? "" : "text-[var(--muted)]/50");
+                        return (
+                          <tr
+                            key={r.date}
+                            className={`border-b border-[var(--border)] last:border-0 transition-colors hover:bg-[var(--card-hover)] ${
+                              r.date === today ? "bg-[var(--primary)]/[0.06]" : ""
+                            }`}
+                            title={dim ? "No rollup was written for this day." : undefined}
+                          >
+                            <td className="px-5 py-2.5">
+                              <DayCell date={r.date} todayDate={today} />
+                            </td>
+                            {dim ? (
+                              <td colSpan={6} className="px-3 py-2.5 text-right text-xs text-[var(--muted)]/60">
+                                not aggregated
+                              </td>
+                            ) : (
+                              <>
+                                <td className={`px-3 py-2.5 text-right tabular-nums ${muted(r.newUsers)}`}>
+                                  {formatCount(r.newUsers)}
+                                </td>
+                                <td className={`px-3 py-2.5 text-right tabular-nums ${muted(r.newSubscriptions)}`}>
+                                  {formatCount(r.newSubscriptions)}
+                                </td>
+                                <td
+                                  className={`px-3 py-2.5 text-right tabular-nums ${
+                                    r.revenue ? "font-medium text-[var(--success)]" : "text-[var(--muted)]/50"
+                                  }`}
+                                >
+                                  {formatMoney(r.revenue, currency)}
+                                </td>
+                                <td className="px-3 py-2.5 text-right tabular-nums text-[var(--muted)]">
+                                  {r.totalUsers == null ? "—" : formatCount(r.totalUsers)}
+                                </td>
+                                <td className="px-3 py-2.5 text-right tabular-nums text-[var(--muted)]">
+                                  {r.activeSubscriptions == null ? "—" : formatCount(r.activeSubscriptions)}
+                                </td>
+                                <td className="px-5 py-2.5 text-right tabular-nums text-[var(--muted)]">
+                                  {r.totalPublishedContent == null ? "—" : formatCount(r.totalPublishedContent)}
+                                </td>
+                              </>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
-            </div>
-
-            {/* Daily breakdown */}
-            <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl overflow-hidden">
-              <div className="px-6 py-4 border-b border-[var(--border)]">
-                <h2 className="text-lg font-semibold">Daily Breakdown (IST)</h2>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[820px]">
-                  <thead>
-                    <tr className="border-b border-[var(--border)]">
-                      <th className="text-left px-4 py-3 text-[var(--muted)] font-medium">Date</th>
-                      <th className="text-right px-4 py-3 text-[var(--muted)] font-medium">New Users</th>
-                      <th className="text-right px-4 py-3 text-[var(--muted)] font-medium">New Subs</th>
-                      <th className="text-right px-4 py-3 text-[var(--muted)] font-medium">Revenue</th>
-                      <th className="text-right px-4 py-3 text-[var(--muted)] font-medium">Total Users</th>
-                      <th className="text-right px-4 py-3 text-[var(--muted)] font-medium">Active Subs</th>
-                      <th className="text-right px-4 py-3 text-[var(--muted)] font-medium">Published</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {entries.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="text-center py-12 text-[var(--muted)]">No data available.</td>
-                      </tr>
-                    ) : (
-                      [...entries].reverse().map((entry) => (
-                        <tr key={entry.date} className="border-b border-[var(--border)] hover:bg-[var(--card-hover)] transition-colors">
-                          <td className="px-4 py-3 font-medium">{entry.date}</td>
-                          <td className="px-4 py-3 text-right text-[var(--muted)]">{(entry.newUsers ?? 0).toLocaleString()}</td>
-                          <td className="px-4 py-3 text-right text-[var(--muted)]">{(entry.newSubscriptions ?? 0).toLocaleString()}</td>
-                          <td className="px-4 py-3 text-right font-medium text-[var(--success)]">{formatMoney(entry.revenue ?? 0, entry.revenueCurrency ?? rangeRevenueCurrency)}</td>
-                          <td className="px-4 py-3 text-right text-[var(--muted)]">{(entry.totalUsers ?? 0).toLocaleString()}</td>
-                          <td className="px-4 py-3 text-right text-[var(--muted)]">{(entry.activeSubscriptions ?? 0).toLocaleString()}</td>
-                          <td className="px-4 py-3 text-right text-[var(--muted)]">{(entry.totalPublishedContent ?? 0).toLocaleString()}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              <p className="px-6 py-3 text-xs text-[var(--muted)] border-t border-[var(--border)]">
-                Each row covers IST 00:00 → next IST 00:00. Snapshot columns (Total Users, Active Subs, Published) are taken at IST 00:00 the
-                following day, when the aggregator runs.
+              <p className="border-t border-[var(--border)] px-5 py-3 text-xs leading-relaxed text-[var(--muted)]">
+                Each row covers IST 00:00 → the next IST 00:00. Today (and yesterday until the
+                aggregator runs) is queried live, so its snapshot columns — total users, active subs,
+                published — show &ldquo;—&rdquo; until midnight.
+                {missingDays > 0 && ` ${missingDays} day${missingDays === 1 ? " has" : "s have"} no rollup and is shown as "not aggregated".`}
               </p>
-            </div>
+            </Panel>
           </>
         )}
       </div>
     </AdminLayout>
-  );
-}
-
-interface DeltaPairProps {
-  label: string;
-  today: string;
-  yesterday: string;
-  todayDate: string;
-  yesterdayDate: string;
-}
-
-function DeltaPair({ label, today, yesterday, todayDate, yesterdayDate }: DeltaPairProps) {
-  return (
-    <div className="bg-[var(--background)] border border-[var(--border)] rounded-xl p-4">
-      <p className="text-sm text-[var(--muted)]">{label}</p>
-      <div className="grid grid-cols-2 gap-4 mt-3">
-        <div>
-          <p className="text-xs text-[var(--muted)]">Today · {todayDate}</p>
-          <p className="text-2xl font-bold text-[var(--foreground)] mt-0.5">{today}</p>
-        </div>
-        <div>
-          <p className="text-xs text-[var(--muted)]">Yesterday · {yesterdayDate}</p>
-          <p className="text-2xl font-bold text-[var(--muted)] mt-0.5">{yesterday}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-interface RangeCardProps {
-  label: string;
-  value: string;
-  color: string;
-}
-
-function RangeCard({ label, value, color }: RangeCardProps) {
-  return (
-    <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5">
-      <p className="text-sm text-[var(--muted)]">{label}</p>
-      <p className="text-2xl font-bold mt-1" style={{ color }}>{value}</p>
-    </div>
   );
 }

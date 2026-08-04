@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
+import { countryFromLocale, countryFromTimezone, normalizeCountry } from "@/lib/geo";
 
 /**
  * POST /api/checkout/attribution
@@ -19,14 +20,34 @@ function clientIp(request: NextRequest): string | null {
   return request.headers.get("x-real-ip") || null;
 }
 
+// Edge/CDN geo headers, best first. Firebase App Hosting sends none of these —
+// they're kept so the same route still works behind Cloudflare/Vercel/App Engine
+// — which is why the browser-supplied timezone below is the real fallback.
+const GEO_HEADERS = [
+  "cf-ipcountry",
+  "x-vercel-ip-country",
+  "x-appengine-country",
+  "x-country-code",
+  "x-client-geo-country",
+  "x-geo-country",
+];
+
 function headerCountry(request: NextRequest): string | null {
-  return (
-    request.headers.get("cf-ipcountry") ||
-    request.headers.get("x-vercel-ip-country") ||
-    request.headers.get("x-appengine-country") ||
-    request.headers.get("x-country-code") ||
-    null
-  );
+  for (const h of GEO_HEADERS) {
+    const c = normalizeCountry(request.headers.get(h));
+    if (c) return c;
+  }
+  return null;
+}
+
+const CITY_HEADERS = ["cf-ipcity", "x-vercel-ip-city", "x-appengine-city", "x-client-geo-city"];
+
+function headerCity(request: NextRequest): string | null {
+  for (const h of CITY_HEADERS) {
+    const v = request.headers.get(h);
+    if (v && v.trim()) return decodeURIComponent(v.trim()).slice(0, 128);
+  }
+  return null;
 }
 
 export async function POST(request: NextRequest) {
@@ -57,6 +78,24 @@ export async function POST(request: NextRequest) {
 
     const str = (v: unknown) => (typeof v === "string" && v ? v.slice(0, 256) : null);
 
+    // Country: edge header if the platform gives us one, else the device's IANA
+    // timezone, else the locale's region subtag. On App Hosting only the last
+    // two ever fire — before this fallback existed every doc stored country:null
+    // and the dashboard's "By country" breakdown was permanently empty.
+    const country =
+      headerCountry(request) ||
+      countryFromTimezone(str(a.tz)) ||
+      countryFromLocale(str(a.lang));
+
+    // User agent: App Hosting's front end replaces the client UA with the
+    // literal "Google" before the request reaches this route, so the header is
+    // worthless here. The browser sends its own navigator.userAgent in the
+    // payload; fall back to the header only when it isn't that placeholder.
+    const headerUa = (request.headers.get("user-agent") || "").trim();
+    const userAgent =
+      (typeof a.ua === "string" && a.ua ? a.ua.slice(0, 512) : null) ||
+      (headerUa && headerUa !== "Google" ? headerUa.slice(0, 512) : null);
+
     await getAdminDb()
       .collection("attributions")
       .doc(txnid)
@@ -80,9 +119,11 @@ export async function POST(request: NextRequest) {
           fbp: str(a.fbp),
           fbc: str(a.fbc),
           ip: clientIp(request),
-          country: headerCountry(request),
-          city: null,
-          userAgent: (request.headers.get("user-agent") || "").slice(0, 512) || null,
+          country,
+          city: headerCity(request),
+          timezone: str(a.tz),
+          locale: str(a.lang),
+          userAgent,
           status: "pending",
           createdAt: new Date(),
         },
