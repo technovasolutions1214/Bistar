@@ -9,6 +9,7 @@ import type { Plan } from "@bistar/shared";
 import { useAuth } from "@/lib/auth-context";
 import { track } from "@/lib/pixel";
 import { getAttribution } from "@/lib/attribution";
+import { normalizePhone, isCompletePhone } from "@/lib/phone";
 
 type ModalStatus =
   | "collect" // guest: entering phone before payment
@@ -203,12 +204,13 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
   // Guest checkout: triggered by the phone-form submit.
   const startGuestCheckout = useCallback(async () => {
     if (!plan) return;
-    const national = phone.replace(/\D/g, "");
-    if (national.length < 10) {
+    // Must match what /auth/login sends to verify-otp — reconcile compares
+    // these two strings for exact equality to release the purchase.
+    const fullPhone = normalizePhone(countryCode, phone);
+    if (!isCompletePhone(countryCode, fullPhone)) {
       setError("Please enter a valid phone number.");
       return;
     }
-    const fullPhone = `${countryCode}${national}`;
     claimPhoneRef.current = fullPhone;
     isGuestRef.current = true;
     setError("");

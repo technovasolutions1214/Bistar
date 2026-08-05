@@ -22,8 +22,11 @@ interface PayUSettings {
  *   5. Server returns the final redirect URL with the hash attached
  *
  * The client then redirects the browser to that URL. The external PayU page
- * (hosted at flix.cinestry.com) handles the rest and redirects users back to
- * the configured callback URL on completion.
+ * (hosted at cineshortz.com) handles the rest and redirects users back to the
+ * configured statusUrl on completion. Separately, PayU's S2S webhook goes to
+ * CineShortz's router, which forwards it to /api/payment/payu/webhook based on
+ * `productinfo` — so productInfo here MUST match the Bistar route registered in
+ * the CineShortz admin, or the payment succeeds and nothing ever activates.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -102,7 +105,16 @@ export async function POST(request: NextRequest) {
     const email = decodedToken.email || userData.email || "contact@cinestry.com";
     const rawPhone: string = userData.phone || decodedToken.phone_number || "";
     const phone = rawPhone ? rawPhone.replace(/\D/g, "").slice(-10) : "0000000000";
-    const statusUrl = payu.statusUrl || "https://flix.cinestry.com/payu-payment-status.html";
+    // No hardcoded fallback: the old default pointed at the retired
+    // flix.cinestry.com status page, so a missing statusUrl would silently send
+    // buyers to a dead host instead of failing loudly here.
+    const statusUrl = payu.statusUrl;
+    if (!statusUrl) {
+      return NextResponse.json(
+        { error: "Payment gateway is misconfigured. Please contact support." },
+        { status: 500 }
+      );
+    }
 
     const data = {
       key: payu.key,

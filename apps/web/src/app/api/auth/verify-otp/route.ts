@@ -73,6 +73,32 @@ export async function POST(request: NextRequest) {
 
     const formattedPhone = phone.startsWith("+") ? phone : `+${phone}`;
 
+    // Defence in depth: MSG91 echoes the number the OTP was actually verified
+    // against. The account below is bound to the CLIENT-supplied `phone`, so if
+    // the two ever disagree, someone is verifying their own number while
+    // claiming another — which would hand them that number's pending purchase.
+    // Only enforced when MSG91 actually returns a number, so this cannot break
+    // the flow if the field is absent.
+    const verifiedRaw =
+      typeof data.mobile === "string"
+        ? data.mobile
+        : typeof data.message === "string" && /^\+?\d{7,15}$/.test(data.message.trim())
+          ? data.message.trim()
+          : null;
+    if (verifiedRaw) {
+      const verified = verifiedRaw.startsWith("+") ? verifiedRaw : `+${verifiedRaw}`;
+      if (verified.replace(/\D/g, "") !== formattedPhone.replace(/\D/g, "")) {
+        console.error("MSG91 verified phone does not match requested phone", {
+          requested: formattedPhone,
+          verified,
+        });
+        return NextResponse.json(
+          { error: "Phone verification mismatch" },
+          { status: 400 }
+        );
+      }
+    }
+
     let uid: string;
     try {
       const userRecord = await getAdminAuth().getUserByPhoneNumber(formattedPhone);

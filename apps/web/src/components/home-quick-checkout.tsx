@@ -11,6 +11,7 @@ import type { Plan } from "@bistar/shared";
 import { useAuth } from "@/lib/auth-context";
 import { track } from "@/lib/pixel";
 import { getAttribution } from "@/lib/attribution";
+import { normalizePhone, isCompletePhone } from "@/lib/phone";
 
 /**
  * Homepage quick-checkout: subscribe to the admin-configured DEFAULT plan
@@ -158,12 +159,13 @@ export function HomeQuickCheckout({
     // pay directly on their account.
     let fullPhone = "";
     if (!realUser) {
-      const national = phone.replace(/\D/g, "");
-      if (national.length < 10) {
+      // Must match what /auth/login sends to verify-otp — reconcile compares
+      // these two strings for exact equality to release the purchase.
+      fullPhone = normalizePhone(countryCode, phone);
+      if (!isCompletePhone(countryCode, fullPhone)) {
         setError("Please enter a valid phone number.");
         return;
       }
-      fullPhone = `${countryCode}${national}`;
     }
 
     setError("");

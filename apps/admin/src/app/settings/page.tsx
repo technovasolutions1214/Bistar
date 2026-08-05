@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   doc,
   getDoc,
@@ -67,9 +67,21 @@ export default function SettingsPage() {
   // PayU settings
   const [payuKey, setPayuKey] = useState("");
   const [payuSalt, setPayuSalt] = useState("");
-  const [payuPaymentUrl, setPayuPaymentUrl] = useState("https://flix.cinestry.com/payu.html");
-  const [payuStatusUrl, setPayuStatusUrl] = useState("https://flix.cinestry.com/payu-payment-status.html");
-  const [payuProductInfo, setPayuProductInfo] = useState("cinestrydays-1415221612924");
+  // Start EMPTY, never with a guessed default. These fields are load-then-save:
+  // a non-empty initial value is written verbatim if anyone saves before the
+  // Firestore read resolves, which previously could stamp the retired
+  // flix.cinestry.com URLs and the old `cinestrydays-…` productInfo over a
+  // working config — and productInfo is what the CineShortz router matches on,
+  // so a wrong value silently stops every webhook from being forwarded.
+  const [payuPaymentUrl, setPayuPaymentUrl] = useState("");
+  const [payuStatusUrl, setPayuStatusUrl] = useState("");
+  const [payuProductInfo, setPayuProductInfo] = useState("");
+  // Was the gateway fully configured when this page loaded? Only then does a
+  // save that blanks a PayU field represent a regression worth blocking.
+  const payuWasCompleteRef = useRef(false);
+  // The settings read failed, so every field on this page is blank for the
+  // wrong reason. Saving would persist those blanks over live config.
+  const [loadFailed, setLoadFailed] = useState(false);
 
   // Site settings
   const [siteName, setSiteName] = useState("");
@@ -138,12 +150,20 @@ export default function SettingsPage() {
           const data = payuSnap.data();
           setPayuKey(data.key || "");
           setPayuSalt(data.salt || "");
-          setPayuPaymentUrl(data.paymentUrl || "https://flix.cinestry.com/payu.html");
-          setPayuStatusUrl(data.statusUrl || "https://flix.cinestry.com/payu-payment-status.html");
-          setPayuProductInfo(data.productInfo || "cinestrydays-1415221612924");
+          setPayuPaymentUrl(data.paymentUrl || "");
+          setPayuStatusUrl(data.statusUrl || "");
+          setPayuProductInfo(data.productInfo || "");
+          payuWasCompleteRef.current = [
+            data.key,
+            data.salt,
+            data.productInfo,
+            data.paymentUrl,
+            data.statusUrl,
+          ].every((v) => typeof v === "string" && v.trim().length > 0);
         }
       } catch (err) {
         console.error("Failed to fetch settings:", err);
+        setLoadFailed(true);
         toast.error("Failed to load settings");
       } finally {
         setLoading(false);
@@ -252,6 +272,39 @@ export default function SettingsPage() {
   };
 
   const handleSave = async () => {
+    // Never write a half-initialised form over live config. Without this, a
+    // save issued while the settings read is still in flight persists empty
+    // PayU credentials and breaks checkout for everyone.
+    if (loading) {
+      toast.error("Settings are still loading — please wait a moment.");
+      return;
+    }
+    // A failed read leaves every field blank. Saving here would wipe the site
+    // name, MSG91 credentials and the whole PayU config in one click.
+    if (loadFailed) {
+      toast.error("Couldn't load the current settings — reload the page before saving.");
+      return;
+    }
+    // PayU is load-then-save: blanking any of these silently kills checkout
+    // (create/route.ts refuses to build a payment without key/salt/paymentUrl/
+    // productInfo, and productInfo is the CineShortz router's match key).
+    //
+    // Only block when a WORKING config would be degraded. An install that was
+    // already incomplete stays saveable, so a half-configured gateway can't lock
+    // an admin out of editing the site name, logo or default plan.
+    const payuFields: [string, string][] = [
+      ["Merchant Key", payuKey],
+      ["Salt", payuSalt],
+      ["Product Info", payuProductInfo],
+      ["Payment URL", payuPaymentUrl],
+      ["Status / Callback URL", payuStatusUrl],
+    ];
+    const missing = payuFields.filter(([, v]) => !v.trim()).map(([label]) => label);
+    if (missing.length && payuWasCompleteRef.current) {
+      toast.error(`PayU settings incomplete: ${missing.join(", ")}`);
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -429,7 +482,9 @@ export default function SettingsPage() {
             <h2 className="text-lg font-semibold">PayU Payment Gateway</h2>
             <p className="text-xs text-[var(--muted)] mt-1">
               Payment is routed through{" "}
-              <code className="text-[var(--primary)]">flix.cinestry.com</code> which forwards to PayU.
+              <code className="text-[var(--primary)]">cineshortz.com</code> which forwards to PayU and
+              routes the result webhook back to Bistar by Product Info. These must match the Bistar
+              route in the CineShortz admin → Payment Routing, or paid subscriptions never activate.
             </p>
           </div>
 
@@ -460,10 +515,11 @@ export default function SettingsPage() {
             <Input
               value={payuProductInfo}
               onChange={(e) => setPayuProductInfo(e.target.value)}
-              placeholder="cinestrydays-1415221612924"
+              placeholder="cineshortz-83875271443"
             />
             <p className="text-xs text-[var(--muted)] mt-1">
-              Identifies this app on the payment gateway. Default is the Bistar code.
+              Identifies this app on the payment gateway, and is the key the CineShortz router matches
+              to forward the result webhook back to Bistar. Must match the Bistar route exactly.
             </p>
           </div>
 
@@ -472,7 +528,7 @@ export default function SettingsPage() {
             <Input
               value={payuPaymentUrl}
               onChange={(e) => setPayuPaymentUrl(e.target.value)}
-              placeholder="https://flix.cinestry.com/payu.html"
+              placeholder="https://cineshortz.com/payu.html"
             />
           </div>
 
@@ -481,7 +537,7 @@ export default function SettingsPage() {
             <Input
               value={payuStatusUrl}
               onChange={(e) => setPayuStatusUrl(e.target.value)}
-              placeholder="https://flix.cinestry.com/payu-payment-status.html"
+              placeholder="https://cineshortz.com/api/payment/payu/return"
             />
           </div>
         </div>

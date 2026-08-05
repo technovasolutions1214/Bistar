@@ -155,5 +155,17 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if false;
     }
+
+    // ---------- PayU webhook delivery log (diagnostics) ----------
+
+    match /webhookLogs/{logId} {
+      // Every S2S delivery forwarded by the CineShortz router, recorded
+      // verbatim by /api/payment/payu/webhook — including deliveries rejected
+      // for a bad hash or an unknown txnid, which leave no trace on the
+      // transaction doc. Contains the buyer's email/phone from PayU's payload,
+      // so admin-only. Server-written (admin SDK) exclusively.
+      allow read: if isAdmin();
+      allow write: if false;
+    }
   }
 }

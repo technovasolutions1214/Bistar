@@ -12,6 +12,7 @@ import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@bistar/firebase-config";
 import { Button, Input } from "@bistar/ui";
 import { useAuth } from "@/lib/auth-context";
+import { normalizePhone, isCompletePhone } from "@/lib/phone";
 import { track } from "@/lib/pixel";
 
 interface MSG91Config {
@@ -46,11 +47,17 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [redirecting, setRedirecting] = useState(false);
   const [claiming, setClaiming] = useState(false);
+  // Set when we arrived from a guest-checkout handoff — the buyer has already
+  // paid and must verify THIS number to receive the subscription.
+  const [claimPhone, setClaimPhone] = useState<string | null>(null);
 
   const [widgetCfg, setWidgetCfg] = useState<{ widgetId: string; tokenAuth: string } | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
   const [scriptLoaded, setScriptLoaded] = useState(false);
   const [widgetReady, setWidgetReady] = useState(false);
+  // The OTP widget failed to initialise (distinct from configError, which is a
+  // server-side config problem). Either way phone sign-in is unavailable.
+  const [widgetFailed, setWidgetFailed] = useState(false);
   const initDone = useRef(false);
 
   // Prefill the phone when arriving from a guest-checkout handoff
@@ -60,6 +67,7 @@ export default function LoginPage() {
     if (typeof window === "undefined") return;
     const cp = new URLSearchParams(window.location.search).get("claimPhone");
     if (!cp) return;
+    setClaimPhone(cp);
     const codes = ["+971", "+91", "+61", "+44", "+1"]; // longest-prefix first
     const m = codes.find((c) => cp.startsWith(c));
     if (m) {
@@ -109,6 +117,7 @@ export default function LoginPage() {
       setWidgetReady(true);
     } catch (err) {
       console.error("MSG91 initSendOTP failed:", err);
+      setWidgetFailed(true);
       setError("Phone login could not be initialised. Please try Google sign-in.");
     }
   }, [scriptLoaded, widgetCfg]);
@@ -169,13 +178,15 @@ export default function LoginPage() {
       setError("Phone OTP is initialising — please wait a moment and try again.");
       return;
     }
-    if (!phone || phone.length < 10) {
+    // Normalize identically to guest checkout so the number we verify is the
+    // number a pending purchase was recorded against.
+    if (!isCompletePhone(countryCode, normalizePhone(countryCode, phone))) {
       setError("Please enter a valid phone number");
       return;
     }
     setLoading(true);
     setError("");
-    const msg91Mobile = `${countryCode}${phone}`.replace(/^\+/, "");
+    const msg91Mobile = normalizePhone(countryCode, phone).replace(/^\+/, "");
     window.sendOtp(
       msg91Mobile,
       () => {
@@ -216,7 +227,7 @@ export default function LoginPage() {
           // Suppress the "already signed in" auto-redirect until we've had the
           // chance to claim any guest payment made against this number.
           setClaiming(true);
-          const fullPhone = `${countryCode}${phone}`;
+          const fullPhone = normalizePhone(countryCode, phone);
           const res = await fetch("/api/auth/verify-otp", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -255,6 +266,19 @@ export default function LoginPage() {
             window.location.href = "/";
             return;
           }
+          // Arrived to claim a purchase but nothing matched — almost always
+          // because a DIFFERENT number was verified than the one paid with.
+          // Say so instead of dropping them on the home page still unsubscribed
+          // and assuming the payment vanished.
+          if (claimPhone && fullPhone !== claimPhone) {
+            setClaiming(false);
+            setLoading(false);
+            setError(
+              `No purchase found for ${fullPhone}. Your payment was made with ${claimPhone} — ` +
+                `sign in with that number to activate it.`,
+            );
+            return;
+          }
           router.push("/");
         } catch (err) {
           setClaiming(false);
@@ -287,30 +311,51 @@ export default function LoginPage() {
         </div>
       )}
 
-      <button
-        onClick={handleGoogleSignIn}
-        disabled={loading}
-        className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white text-gray-900 font-medium rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 mb-6"
-      >
-        <svg className="w-5 h-5" viewBox="0 0 24 24">
-          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
-          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-        </svg>
-        Continue with Google
-      </button>
+      {claimPhone && (
+        <div className="mb-6 p-3 bg-[var(--gold-2)]/10 border border-[var(--gold-2)]/30 rounded-lg text-sm">
+          <p className="font-medium text-[var(--foreground)] mb-1">Activate your purchase</p>
+          <p className="text-[var(--muted)]">
+            Verify{" "}
+            <span className="font-medium text-[var(--foreground)]">{claimPhone}</span> — the number you
+            paid with — to add the subscription to your account.
+          </p>
+        </div>
+      )}
 
-      <div className="relative mb-6">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-[var(--border)]" />
-        </div>
-        <div className="relative flex justify-center text-xs">
-          <span className="px-3 bg-[var(--card)] text-[var(--muted)]">
-            or sign in with phone
-          </span>
-        </div>
-      </div>
+      {/* A guest payment can only be claimed against the phone it was made with
+          (the server matches on the OTP-verified number). Google gives us no
+          phone, so offering it here would silently strand a completed purchase
+          — hide it while a claim is pending. Still show it if phone OTP is
+          unavailable for ANY reason (server config or widget init), otherwise
+          that outage would leave the buyer with no way to sign in at all. */}
+      {(!claimPhone || !!configError || widgetFailed) && (
+        <>
+          <button
+            onClick={handleGoogleSignIn}
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white text-gray-900 font-medium rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 mb-6"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+            </svg>
+            Continue with Google
+          </button>
+
+          <div className="relative mb-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-[var(--border)]" />
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="px-3 bg-[var(--card)] text-[var(--muted)]">
+                or sign in with phone
+              </span>
+            </div>
+          </div>
+        </>
+      )}
 
       {!otpSent ? (
         <div className="space-y-4">
