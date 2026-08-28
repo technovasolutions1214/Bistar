@@ -13,6 +13,7 @@ import { db } from "@bistar/firebase-config";
 import { Loader } from "@bistar/ui";
 import { useAuth } from "@/lib/auth-context";
 import { track } from "@/lib/pixel";
+import { reportAdEvent } from "@/lib/attribution";
 import { PaymentModal } from "@/components/payment-modal";
 
 import type { Plan } from "@bistar/shared";
@@ -58,6 +59,7 @@ export default function PlansPage() {
       currency: "INR",
       num_items: 1,
     });
+    reportAdEvent("initiate_checkout", { value: plan.price });
 
     // PaymentModal handles create + popup + polling. We stay on /plans so the
     // polling tab doesn't get unloaded mid-payment the way a top-level redirect

@@ -14,6 +14,7 @@ import { Button, Input } from "@bistar/ui";
 import { useAuth } from "@/lib/auth-context";
 import { normalizePhone, isCompletePhone } from "@/lib/phone";
 import { track } from "@/lib/pixel";
+import { reportAdEvent } from "@/lib/attribution";
 
 interface MSG91Config {
   widgetId: string;
@@ -142,6 +143,8 @@ export default function LoginPage() {
       });
       // First-time user — fire CompleteRegistration. Re-signins are no-ops.
       track("CompleteRegistration", { registration_method: method, status: true });
+      // Same moment, for the ad network the visitor came from.
+      reportAdEvent("registration");
       return { isNew: true };
     }
     await setDoc(userRef, { ...data, updatedAt: serverTimestamp() }, { merge: true });

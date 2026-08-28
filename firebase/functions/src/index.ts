@@ -11,3 +11,8 @@ export { checkExpiredSubscriptions } from "./subscription";
 export { aggregateDailyAnalytics } from "./analytics";
 export { onPurchaseSendCapi } from "./marketing-capi";
 export { aggregateMarketingDaily } from "./marketing-analytics";
+export {
+  onAdPostbackQueued,
+  onPurchaseSendAdPostbacks,
+  retryAdPostbacks,
+} from "./ad-postbacks";

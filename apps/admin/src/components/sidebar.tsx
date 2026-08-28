@@ -61,6 +61,18 @@ const navItems = [
     ),
   },
   {
+    // Ad-network S2S postbacks. Lives in navItems (not the Marketing tab bar)
+    // on purpose: navItems is the admin-only list, so the marketing role never
+    // sees this entry — and admin-layout blocks the route for them anyway.
+    label: "Ad Networks",
+    href: "/ad-networks",
+    icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.348 14.652a3.75 3.75 0 010-5.304m5.304 0a3.75 3.75 0 010 5.304m-7.425 2.121a6.75 6.75 0 010-9.546m9.546 0a6.75 6.75 0 010 9.546M5.106 18.894c-4.808-4.807-4.808-12.6 0-17.407m13.788 0c4.808 4.807 4.808 12.6 0 17.407M12 12h.008v.008H12V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+      </svg>
+    ),
+  },
+  {
     label: "Analytics",
     href: "/analytics",
     icon: (

@@ -10,7 +10,7 @@ import { Button, Input } from "@bistar/ui";
 import type { Plan } from "@bistar/shared";
 import { useAuth } from "@/lib/auth-context";
 import { track } from "@/lib/pixel";
-import { getAttribution } from "@/lib/attribution";
+import { getAttribution, reportAdEvent } from "@/lib/attribution";
 import { normalizePhone, isCompletePhone } from "@/lib/phone";
 
 /**
@@ -183,6 +183,7 @@ export function HomeQuickCheckout({
       currency: plan.currency || "INR",
       num_items: 1,
     });
+    reportAdEvent("initiate_checkout", { value: plan.price });
 
     try {
       let u = auth().currentUser;

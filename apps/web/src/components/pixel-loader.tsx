@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { collection, getDocs, doc, getDoc } from "firebase/firestore";
 import { db } from "@bistar/firebase-config";
-import { captureAttribution, getAttribution } from "@/lib/attribution";
+import { captureAttribution, getAttribution, reportAdEvent } from "@/lib/attribution";
 
 // Loads the right Meta Pixel and fires PageView on every route change.
 //
@@ -25,6 +25,14 @@ export function PixelLoader() {
   // Resolve the active pixel + capture attribution, once per load.
   useEffect(() => {
     let cancelled = false;
+    // Capture BEFORE the Firestore round trip. The click id only exists in this
+    // page's URL, and if the pixels read fails — offline, rules, a slow network
+    // — everything below is skipped and the click id is gone for good. For
+    // ad-network traffic that means the conversion can never be posted back, so
+    // capture first and refine with the resolved pixel afterwards.
+    const first = captureAttribution();
+    if (first.freshAdClick) reportAdEvent("landing");
+
     async function resolve() {
       try {
         const snap = await getDocs(collection(db(), "pixels"));
@@ -48,6 +56,9 @@ export function PixelLoader() {
         }
 
         if (cancelled) return;
+        // Re-capture, this time stamping which pixel we picked. The landing
+        // event is not re-fired here — it already went above, and the server
+        // de-duplicates per (network, event, click id) anyway.
         captureAttribution({ pixelSlug: chosen?.slug, pixelId: chosen?.pixelId });
         setPixelId(chosen?.pixelId || null);
       } catch (err) {

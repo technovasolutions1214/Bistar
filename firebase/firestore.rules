@@ -156,6 +156,43 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ---------- Ad networks: S2S postbacks (ADMIN ONLY) ----------
+    //
+    // Deliberately walled off from isMarketingStaff(): the postback pipeline
+    // decides what our advertising spend optimises against, and the marketing
+    // role must not see or change it. Everything here is admin-only.
+
+    match /adNetworks/{slug} {
+      // Per-network config: postback URL template, method, payout rules and
+      // which events fire. No credentials — those live in adNetworkSecrets.
+      allow read, write: if isAdmin();
+    }
+
+    match /adNetworkSecrets/{slug} {
+      // API key / token some networks require in the postback URL. Never
+      // client-readable; only the postback Cloud Function reads it (admin SDK
+      // bypasses rules). Write-only from the panel, exactly like pixelSecrets.
+      allow read: if false;
+      allow write: if isAdmin();
+    }
+
+    match /adAttributions/{txnId} {
+      // Which network + click id a purchase came from. Written server-side by
+      // /api/checkout/attribution. Admin-only, which is why it is a separate
+      // collection from the marketing-readable `attributions`.
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /adPostbacks/{postbackId} {
+      // Queue AND delivery log in one: rows are created server-side (purchase
+      // trigger, /api/track/ad-event, or the panel's test/retry API), then
+      // delivered and stamped with the result by onAdPostbackQueued. Contains
+      // rendered postback URLs, so admin-only read; never client-writable.
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // ---------- PayU webhook delivery log (diagnostics) ----------
 
     match /webhookLogs/{logId} {

@@ -11,6 +11,12 @@ import { countryFromLocale, countryFromTimezone, normalizeCountry } from "@/lib/
  * fire a server-side event to the right pixel, and the marketing dashboard
  * reads it for conversion analytics.
  *
+ * When the visitor arrived from an ad network instead (?net=…&cid=…), the
+ * network half of the bundle is written to a SEPARATE `adAttributions/{txnid}`
+ * doc. That split is deliberate: `attributions` is readable by marketing staff,
+ * while the ad-network S2S postback pipeline — and the panel that configures
+ * it — is admin-only. The purchase postback trigger reads `adAttributions`.
+ *
  * Called by both guest and logged-in checkouts; the sealed PayU create route
  * and webhook are untouched. Non-critical: failures never block payment.
  */
@@ -77,6 +83,11 @@ export async function POST(request: NextRequest) {
     if (tx.userId !== uid) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const str = (v: unknown) => (typeof v === "string" && v ? v.slice(0, 256) : null);
+    // Network slugs are `adNetworks` doc ids — same charset the admin panel allows.
+    const slug = (v: unknown) => {
+      const s = str(v)?.toLowerCase().replace(/[^a-z0-9-_]/g, "");
+      return s || null;
+    };
 
     // Country: edge header if the platform gives us one, else the device's IANA
     // timezone, else the locale's region subtag. On App Hosting only the last
@@ -96,7 +107,38 @@ export async function POST(request: NextRequest) {
       (typeof a.ua === "string" && a.ua ? a.ua.slice(0, 512) : null) ||
       (headerUa && headerUa !== "Google" ? headerUa.slice(0, 512) : null);
 
-    await getAdminDb()
+    // The ad-network click, when there is one. Written to its own admin-only
+    // collection (see the header) and only when both halves are present — a
+    // network without a click id can never be posted back, so an empty doc
+    // would just be noise in the deliveries log.
+    const adNetwork = slug(a.adNetwork);
+    const adClickId = str(a.adClickId);
+    const adWrite =
+      adNetwork && adClickId
+        ? getAdminDb()
+            .collection("adAttributions")
+            .doc(txnid)
+            .set(
+              {
+                txnid,
+                userId: uid,
+                network: adNetwork,
+                clickId: adClickId,
+                zone: str(a.adZone),
+                campaign: str(a.adCampaign),
+                creative: str(a.adCreative),
+                cost: str(a.adCost),
+                landedAt: typeof a.adLandedAt === "number" ? new Date(a.adLandedAt) : null,
+                country,
+                ip: clientIp(request),
+                userAgent,
+                createdAt: new Date(),
+              },
+              { merge: true },
+            )
+        : Promise.resolve();
+
+    const metaWrite = getAdminDb()
       .collection("attributions")
       .doc(txnid)
       .set(
@@ -129,6 +171,11 @@ export async function POST(request: NextRequest) {
         },
         { merge: true }
       );
+
+    // allSettled, not all: a failure writing one half must not lose the other.
+    const [meta, ad] = await Promise.allSettled([metaWrite, adWrite]);
+    if (meta.status === "rejected") console.error("attribution write failed:", meta.reason);
+    if (ad.status === "rejected") console.error("adAttribution write failed:", ad.reason);
 
     return NextResponse.json({ ok: true });
   } catch (err) {
