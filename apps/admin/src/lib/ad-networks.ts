@@ -206,8 +206,9 @@ export const AD_NETWORKS: AdNetworkDef[] = [
       "Send the SAME click id on every goal level for a visitor.",
       "PropellerAds publishes conflicting spellings elsewhere ({zoneid} vs {zone_id}, {campaignid} vs {campaign_id}). Copy tokens from the list under the Target URL field in the campaign editor — that list is specific to your ad format and is the only authoritative one.",
       "If a tracker cannot handle ${SUBID}, PropellerAds documents these equivalents for the same value: {SUBID}, {CLICKID}, {click_id}, {clickid}, {CLICK_ID}, ${subid}, _~click_id~_.",
-      "Conversions can take up to 24 hours to appear in PropellerAds statistics — a missing test conversion is not proof of a broken integration.",
-      "The success response body is not documented. Treat any 2xx as accepted and do not parse it.",
+
+      "Response semantics, confirmed by probing the live endpoint on 2026-08-29: an unknown or empty click id is rejected with HTTP 400 and an empty body, and an accepted conversion returns HTTP 200 with the body \"1:0\". So unlike AdMaven or PopAds, a non-2xx here is a real signal worth acting on — a failed delivery usually means the click id never reached us intact. The success body is still not officially documented, which is why no success pattern is set: one observed sample is not enough to reject a 200 on.",
+      "Conversions are accepted immediately but surface in PropellerAds' own reporting on a lag, so a delivery marked sent with nothing yet visible in their dashboard is normal.",
     ],
   },
   {
