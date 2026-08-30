@@ -121,6 +121,29 @@ function pick(q: URLSearchParams, names: readonly string[], max = MAX_EXTRA_LEN)
   return undefined;
 }
 
+/**
+ * True when a value is a macro the network failed to substitute, so the literal
+ * token arrived instead of a value — ${SUBID}, {CLICKID}, [clickid],
+ * {:click_id}, {{ctoken}}, [IMPRESSIONID].
+ *
+ * This is the commonest ad-network setup mistake (a macro copied from the wrong
+ * network's docs) and it is silent: nothing errors, the click id is just junk.
+ * Storing it would produce a postback that can never attribute while being
+ * logged as a perfectly healthy delivery — the worst outcome, because it looks
+ * like it works. Seen live: a PropellerAds test banner expands ${SUBID} for real
+ * but leaves {zoneid} untouched.
+ */
+function isUnexpandedMacro(v: string | undefined): boolean {
+  if (!v) return false;
+  return /^\$?\{\{?[^}]*\}\}?$/.test(v) || /^\[[^\]]*\]$/.test(v);
+}
+
+/** A captured value, or undefined when the network left the macro unexpanded. */
+function clean(v: string | undefined): string | undefined {
+  return isUnexpandedMacro(v) ? undefined : v;
+}
+
+
 /** Network slugs are doc ids in `adNetworks` — normalise to the same charset
  *  the admin panel allows so a stray uppercase in an ad URL still matches. */
 function normalizeSlug(v: string | undefined): string | undefined {
@@ -150,7 +173,7 @@ export function captureAttribution(resolved?: { pixelSlug?: string; pixelId?: st
 
   if (hasParams) {
     const adNetwork = normalizeSlug(pick(q, AD_PARAMS.network));
-    const adClickId = pick(q, AD_PARAMS.clickId, MAX_CLICK_ID_LEN);
+    const adClickId = clean(pick(q, AD_PARAMS.clickId, MAX_CLICK_ID_LEN));
     freshAdClick = !!(adNetwork && adClickId);
 
     // Every value goes through pick() so it is bounded. An unbounded Meta param
@@ -168,10 +191,10 @@ export function captureAttribution(resolved?: { pixelSlug?: string; pixelId?: st
       fbclid: pick(q, ["fbclid"], MAX_CLICK_ID_LEN),
       adNetwork,
       adClickId,
-      adZone: pick(q, AD_PARAMS.zone),
-      adCampaign: pick(q, AD_PARAMS.campaign),
-      adCreative: pick(q, AD_PARAMS.creative),
-      adCost: pick(q, AD_PARAMS.cost),
+      adZone: clean(pick(q, AD_PARAMS.zone)),
+      adCampaign: clean(pick(q, AD_PARAMS.campaign)),
+      adCreative: clean(pick(q, AD_PARAMS.creative)),
+      adCost: clean(pick(q, AD_PARAMS.cost)),
       adLandedAt: freshAdClick ? Date.now() : undefined,
     };
   }
