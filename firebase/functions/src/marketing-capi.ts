@@ -15,6 +15,58 @@ function sha256(value: string): string {
   return createHash("sha256").update(value.trim().toLowerCase()).digest("hex");
 }
 
+/** Retention for the Pixels-panel event feed; matches the ad-postbacks log. */
+const PIXEL_EVENT_TTL_DAYS = 60;
+
+/**
+ * A pixel's saved Test Events code, but only while it is still inside its
+ * window. An expired or missing code reads as absent — see the call site.
+ */
+function activeTestEventCode(pixel: admin.firestore.DocumentData): string | undefined {
+  const code = String(pixel.testEventCode ?? "").trim();
+  if (!code) return undefined;
+  const until = pixel.testEventCodeExpiresAt as admin.firestore.Timestamp | undefined;
+  if (until?.toDate && until.toDate().getTime() < Date.now()) return undefined;
+  return code;
+}
+
+/**
+ * Append a server event to `pixelEvents`, the feed the Pixels panel reads.
+ *
+ * Browser events land in the same collection from the consumer site's
+ * /api/track/pixel-event, so the panel can show one chronological story of
+ * everything that reached a pixel — which is the whole point of the feed, since
+ * a CAPI token that can send events is not necessarily allowed to READ the
+ * pixel back from the Graph API.
+ *
+ * Best effort by design: failing to log a diagnostic must never fail, or retry,
+ * the purchase trigger that produced it.
+ */
+async function logPixelEvent(entry: {
+  pixelSlug: string;
+  pixelId: string;
+  event: string;
+  eventId: string;
+  testEventCode: string | null;
+  result: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    const now = new Date();
+    await admin
+      .firestore()
+      .collection("pixelEvents")
+      .doc(`capi-${entry.event}-${entry.eventId}`)
+      .set({
+        ...entry,
+        source: "capi-purchase",
+        createdAt: now,
+        expiresAt: new Date(now.getTime() + PIXEL_EVENT_TTL_DAYS * 24 * 60 * 60 * 1000),
+      });
+  } catch (err) {
+    logger.warn("pixelEvents log failed", err);
+  }
+}
+
 /**
  * Sends a server-side Meta Conversions API "Purchase" when a transaction flips
  * to success. Fires to the pixel the visitor came from (from the attribution
@@ -125,7 +177,14 @@ export const onPurchaseSendCapi = onDocumentUpdated(
         },
       ],
     };
-    if (pixelData.testEventCode) payload.test_event_code = pixelData.testEventCode;
+    // A test code set in the Pixels panel applies to real purchases too — that
+    // is the point, it is how you verify the live path against Events Manager.
+    // But it is honoured only inside its window: a code left behind on a pixel
+    // would otherwise keep flagging every real purchase as a test event, and
+    // test events are excluded from reporting and ad optimisation. Silently
+    // losing real conversions is far worse than a test that must be re-run.
+    const testCode = activeTestEventCode(pixelData);
+    if (testCode) payload.test_event_code = testCode;
 
     try {
       const res = await fetch(
@@ -135,6 +194,7 @@ export const onPurchaseSendCapi = onDocumentUpdated(
       const body = (await res.json().catch(() => ({}))) as {
         error?: unknown;
         events_received?: number;
+        messages?: unknown[];
         fbtrace_id?: string;
       };
       const ok = res.ok && !body.error;
@@ -150,6 +210,24 @@ export const onPurchaseSendCapi = onDocumentUpdated(
         },
         { merge: true }
       );
+      await logPixelEvent({
+        pixelSlug,
+        pixelId,
+        event: "Purchase",
+        eventId: txnId,
+        testEventCode: testCode ?? null,
+        result: {
+          ok,
+          http: res.status,
+          eventsReceived: body.events_received ?? null,
+          // Meta reports a stale test_event_code here, on an otherwise clean
+          // 200. Without this the panel would show a healthy send for an event
+          // that never reached Test Events.
+          messages: Array.isArray(body.messages) ? body.messages.map(String) : [],
+          error: body.error ? JSON.stringify(body.error).slice(0, 500) : null,
+          fbtraceId: body.fbtrace_id ?? null,
+        },
+      });
       if (ok) logger.info(`CAPI Purchase sent for ${txnId} -> pixel ${pixelSlug}`);
       else logger.error(`CAPI Purchase rejected for ${txnId}`, body.error);
     } catch (err) {
@@ -158,6 +236,21 @@ export const onPurchaseSendCapi = onDocumentUpdated(
         { ...purchasedBase, pixelSlug, capiStatus: "error", capiSentAt: new Date() },
         { merge: true }
       );
+      await logPixelEvent({
+        pixelSlug,
+        pixelId,
+        event: "Purchase",
+        eventId: txnId,
+        testEventCode: testCode ?? null,
+        result: {
+          ok: false,
+          http: 0,
+          eventsReceived: null,
+          messages: [],
+          error: err instanceof Error ? err.message : "request failed",
+          fbtraceId: null,
+        },
+      });
     }
   }
 );

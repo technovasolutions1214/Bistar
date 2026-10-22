@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import { collection, getDocs, doc, getDoc } from "firebase/firestore";
 import { db } from "@bistar/firebase-config";
 import { captureAttribution, getAttribution, reportAdEvent } from "@/lib/attribution";
+import { configurePixelDiagnostics, track } from "@/lib/pixel";
+import { PixelDebugOverlay } from "@/components/pixel-debug-overlay";
 
 // Loads the right Meta Pixel and fires PageView on every route change.
 //
@@ -12,14 +14,23 @@ import { captureAttribution, getAttribution, reportAdEvent } from "@/lib/attribu
 // visitor's campaign slug (?c=… or the stored cookie), falling back to the
 // default pixel. If no pixels are configured it falls back to the legacy single
 // settings/general.metaPixelId, so existing setups keep working.
+//
+// Verifying a pixel: it also wires up lib/pixel's diagnostics tap, so the
+// events it fires are observable in two places —
+//   * the Pixels panel, while that pixel's verify window is open (`verifyUntil`),
+//   * an on-page overlay, on any load carrying `?pixelDebug=1`.
 interface PixelDoc {
   slug: string;
   pixelId?: string;
   isDefault?: boolean;
+  /** Set by the Pixels panel's "Verify" action; a Firestore Timestamp. */
+  verifyUntil?: { toDate?: () => Date };
 }
 
 export function PixelLoader() {
   const [pixelId, setPixelId] = useState<string | null>(null);
+  const [slug, setSlug] = useState<string | null>(null);
+  const [overlay, setOverlay] = useState(false);
   const pathname = usePathname();
 
   // Resolve the active pixel + capture attribution, once per load.
@@ -33,19 +44,33 @@ export function PixelLoader() {
     const first = captureAttribution();
     if (first.freshAdClick) reportAdEvent("landing");
 
+    // Read once, up front: a client-side route change later in the session
+    // drops the query string, and the overlay should stay up for the whole
+    // visit once it has been asked for.
+    const debugOn = new URLSearchParams(window.location.search).get("pixelDebug") === "1";
+    if (debugOn) {
+      configurePixelDiagnostics({ overlay: true });
+      setOverlay(true);
+    }
+
     async function resolve() {
       try {
         const snap = await getDocs(collection(db(), "pixels"));
         const pixels: PixelDoc[] = snap.docs.map((d) => {
           const data = d.data();
-          return { slug: d.id, pixelId: data.pixelId as string | undefined, isDefault: !!data.isDefault };
+          return {
+            slug: d.id,
+            pixelId: data.pixelId as string | undefined,
+            isDefault: !!data.isDefault,
+            verifyUntil: data.verifyUntil as PixelDoc["verifyUntil"],
+          };
         });
 
         let chosen: PixelDoc | null = null;
         if (pixels.length > 0) {
-          const slug = new URLSearchParams(window.location.search).get("c") || getAttribution().pixelSlug;
+          const slugParam = new URLSearchParams(window.location.search).get("c") || getAttribution().pixelSlug;
           chosen =
-            (slug ? pixels.find((p) => p.slug === slug) : undefined) ||
+            (slugParam ? pixels.find((p) => p.slug === slugParam) : undefined) ||
             pixels.find((p) => p.isDefault) ||
             pixels[0];
         } else {
@@ -60,6 +85,17 @@ export function PixelLoader() {
         // event is not re-fired here — it already went above, and the server
         // de-duplicates per (network, event, click id) anyway.
         captureAttribution({ pixelSlug: chosen?.slug, pixelId: chosen?.pixelId });
+
+        // The server re-checks the window before storing anything, so this flag
+        // only decides whether we bother sending the beacon at all.
+        const until = chosen?.verifyUntil?.toDate?.();
+        configurePixelDiagnostics({
+          slug: chosen?.slug,
+          pixelId: chosen?.pixelId,
+          verify: !!until && until.getTime() > Date.now(),
+        });
+
+        setSlug(chosen?.slug || null);
         setPixelId(chosen?.pixelId || null);
       } catch (err) {
         console.warn("PixelLoader: failed to resolve pixel", err);
@@ -95,12 +131,15 @@ fbq('init', '${pixelId}');`;
     document.head.appendChild(ns);
   }, [pixelId]);
 
-  // PageView on every route change (including the first).
+  // PageView on every route change (including the first). Routed through
+  // track() rather than fbq directly so it shows up in the diagnostics feed
+  // alongside every other event — PageView is the one that proves the pixel
+  // loaded at all, so it is the one you least want missing from the feed.
   useEffect(() => {
     if (!pixelId) return;
-    if (typeof window.fbq !== "function") return;
-    window.fbq("track", "PageView");
+    track("PageView");
   }, [pixelId, pathname]);
 
-  return null;
+  if (!overlay) return null;
+  return <PixelDebugOverlay pixelId={pixelId} slug={slug} />;
 }

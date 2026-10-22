@@ -132,6 +132,20 @@ service cloud.firestore {
       allow write: if isMarketingStaff();
     }
 
+    match /pixelEvents/{eventId} {
+      // Diagnostics feed for the Pixels panel: which events actually reached a
+      // pixel, from the browser (consumer site beacon) and from CAPI.
+      //
+      // Read-only for marketing staff, and written ONLY server-side — the
+      // consumer site's /api/track/pixel-event and the onPurchaseSendCapi
+      // trigger, both of which use the Admin SDK and bypass these rules. No
+      // client write path exists on purpose: a collection a browser could
+      // append to is a collection an attacker can fill with fictional events,
+      // and this one is read as evidence that tracking works.
+      allow read: if isMarketingStaff();
+      allow write: if false;
+    }
+
     // ---------- Marketing: purchase attribution (source per txn) ----------
 
     match /attributions/{txnId} {
