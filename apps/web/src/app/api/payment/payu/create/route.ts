@@ -15,6 +15,7 @@ interface PayUSettings {
  *
  * Flow:
  *   1. Client (authenticated) calls POST /api/payment/payu/create with { planId }
+ *      (guest checkout also sends the phone it collected: { planId, phone })
  *   2. Server verifies the caller's Firebase ID token
  *   3. Server fetches PayU credentials from settings/payu (Firestore)
  *   4. Server fetches the plan, builds the PayU data payload, and generates the
@@ -56,7 +57,8 @@ export async function POST(request: NextRequest) {
     const userId = decodedToken.uid;
 
     // --- 2. Parse body ---------------------------------------------------
-    const { planId } = await request.json();
+    const body = await request.json();
+    const { planId } = body;
     if (!planId) {
       return NextResponse.json(
         { error: "planId is required" },
@@ -103,7 +105,17 @@ export async function POST(request: NextRequest) {
     const amount = String(plan.price);
     const firstname = userId; // PayU's firstname field is used as our userId (matches cinestry template)
     const email = decodedToken.email || userData.email || "contact@cinestry.com";
-    const rawPhone: string = userData.phone || decodedToken.phone_number || "";
+    // A guest (anonymous session) has no phone on file, so guest checkout sends
+    // the one it just collected — otherwise PayU gets the placeholder and asks
+    // the buyer again. Indian mobiles only: the last-10-digits rule below turns
+    // other countries' numbers into a wrong one. Phone is in neither PayU hash.
+    const guestPhone =
+      decodedToken.firebase.sign_in_provider === "anonymous" &&
+      typeof body.phone === "string" &&
+      /^\+91[6-9]\d{9}$/.test(body.phone)
+        ? body.phone
+        : "";
+    const rawPhone: string = userData.phone || decodedToken.phone_number || guestPhone;
     const phone = rawPhone ? rawPhone.replace(/\D/g, "").slice(-10) : "0000000000";
     // No hardcoded fallback: the old default pointed at the retired
     // flix.cinestry.com status page, so a missing statusUrl would silently send

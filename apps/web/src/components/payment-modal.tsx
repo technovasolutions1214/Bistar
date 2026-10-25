@@ -226,10 +226,11 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
       }
       const token = await u.getIdToken();
 
+      // Pass the phone on so PayU prefills it instead of asking a second time.
       const res = await fetch("/api/payment/payu/create", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ planId: plan.id }),
+        body: JSON.stringify({ planId: plan.id, phone: fullPhone }),
       });
       const body = await res.json();
       if (!res.ok || !body.paymentUrl) {

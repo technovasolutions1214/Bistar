@@ -193,10 +193,13 @@ export function HomeQuickCheckout({
       }
       const token = await u.getIdToken();
 
+      // Guests pass their phone on so PayU prefills it instead of asking again.
       const res = await fetch("/api/payment/payu/create", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ planId: plan.id }),
+        body: JSON.stringify(
+          isGuestRef.current ? { planId: plan.id, phone: fullPhone } : { planId: plan.id },
+        ),
       });
       const body = await res.json();
       if (!res.ok || !body.paymentUrl) {
