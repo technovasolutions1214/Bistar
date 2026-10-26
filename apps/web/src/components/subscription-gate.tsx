@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 
 interface SubscriptionGateProps {
@@ -8,13 +10,48 @@ interface SubscriptionGateProps {
   children: React.ReactNode;
   /** Optional custom paywall to render when gated (e.g. the home landing hero). */
   fallback?: React.ReactNode;
+  /** False until the caller knows whether the page is gated; shows the skeleton meanwhile. */
+  ready?: boolean;
 }
 
-export function SubscriptionGate({ requireGate, children, fallback }: SubscriptionGateProps) {
-  const { hasActiveSubscription, loading, firebaseUser } = useAuth();
+/**
+ * A signed-in viewer without an active subscription has nothing to do on a
+ * gated page but pick a pack, so send them straight to the /plans paywall.
+ * Logged-out visitors and anonymous guest-checkout sessions are left alone:
+ * they get the landing / paywall UI that lets them pay first and sign in after.
+ *
+ * Waits for the user doc from the server: a cache-only miss would otherwise
+ * send a paying subscriber away, with nothing to bring them back.
+ *
+ * Returns true while redirecting so the caller can render a placeholder.
+ */
+export function usePaywallRedirect(requireGate: boolean, ready = true): boolean {
+  const { firebaseUser, hasActiveSubscription, loading, userDocConfirmed } = useAuth();
+  const router = useRouter();
+  const redirect =
+    ready &&
+    requireGate &&
+    !loading &&
+    userDocConfirmed &&
+    !!firebaseUser &&
+    !firebaseUser.isAnonymous &&
+    !hasActiveSubscription;
 
-  // Show loading skeleton while auth state is resolving and gate is required
-  if (loading && requireGate) {
+  useEffect(() => {
+    if (redirect) router.replace("/plans");
+  }, [redirect, router]);
+
+  return redirect;
+}
+
+export function SubscriptionGate({ requireGate, children, fallback, ready = true }: SubscriptionGateProps) {
+  const { hasActiveSubscription, loading, firebaseUser } = useAuth();
+  const redirecting = usePaywallRedirect(requireGate, ready);
+
+  // Show loading skeleton while auth state is resolving and gate is required,
+  // while the caller is still working out whether to gate, and while a
+  // signed-in non-subscriber is on their way to /plans.
+  if ((loading && requireGate) || !ready || redirecting) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center px-6">
         <div className="animate-pulse space-y-4 w-full max-w-md">

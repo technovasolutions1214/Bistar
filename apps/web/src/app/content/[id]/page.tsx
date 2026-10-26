@@ -16,6 +16,7 @@ import { db } from "@bistar/firebase-config";
 import { Loader, Button } from "@bistar/ui";
 import { useAuth } from "@/lib/auth-context";
 import { track } from "@/lib/pixel";
+import { usePaywallRedirect } from "@/components/subscription-gate";
 import type { Content, Video } from "@bistar/shared";
 
 interface GeneralSettings {
@@ -29,6 +30,11 @@ export default function ContentDetailPage() {
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
   const [generalSettings, setGeneralSettings] = useState<GeneralSettings | null>(null);
+  // Settings are fetched alongside the content, so `loading` covers them too.
+  const redirecting = usePaywallRedirect(
+    generalSettings?.requireSubscriptionToBrowse || false,
+    !loading,
+  );
 
   useEffect(() => {
     async function fetchContent() {
@@ -75,7 +81,7 @@ export default function ContentDetailPage() {
     });
   }, [content]);
 
-  if (loading || authLoading) {
+  if (loading || authLoading || redirecting) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader />

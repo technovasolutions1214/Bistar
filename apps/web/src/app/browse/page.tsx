@@ -32,6 +32,9 @@ export default function BrowsePage() {
   const [content, setContent] = useState<Content[]>([]);
   const [loading, setLoading] = useState(true);
   const [generalSettings, setGeneralSettings] = useState<GeneralSettings | null>(null);
+  // Until settings resolve we don't know whether the library is gated, so hold
+  // it back rather than flash every title at a viewer who may not be allowed it.
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   // Fetch general settings once
   useEffect(() => {
@@ -43,6 +46,8 @@ export default function BrowsePage() {
         }
       } catch (error) {
         console.error("Failed to fetch general settings:", error);
+      } finally {
+        setSettingsLoaded(true);
       }
     }
     fetchSettings();
@@ -108,7 +113,10 @@ export default function BrowsePage() {
 
   return (
     <div className="min-h-screen pt-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-      <SubscriptionGate requireGate={generalSettings?.requireSubscriptionToBrowse || false}>
+      <SubscriptionGate
+        requireGate={generalSettings?.requireSubscriptionToBrowse || false}
+        ready={settingsLoaded}
+      >
       {/* Search */}
       <div className="mb-6">
         <p className="eyebrow mb-2">Browse the library</p>

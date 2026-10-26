@@ -10,6 +10,13 @@ interface AuthContextType {
   userData: User | null;
   loading: boolean;
   hasActiveSubscription: boolean;
+  /**
+   * True once the current user's doc has been seen from the SERVER, not just
+   * the local cache. `loading` also clears on a cache-only miss or a listener
+   * error, which is fine for rendering a paywall in place (it swaps itself
+   * out when the server answers) but not for navigating a viewer away.
+   */
+  userDocConfirmed: boolean;
   signOut: () => Promise<void>;
 }
 
@@ -18,13 +25,28 @@ const AuthContext = createContext<AuthContextType>({
   userData: null,
   loading: true,
   hasActiveSubscription: false,
+  userDocConfirmed: false,
   signOut: async () => {},
 });
+
+/** Whether a user doc's subscription is active right now. */
+export function isActiveSubscription(sub: User["subscription"] | undefined): boolean {
+  if (!sub || sub.status !== "active") return false;
+  // endDate is a Firestore Timestamp in practice, but tolerate serialized
+  // string/number values from older writes.
+  const end = sub.endDate;
+  const endDate =
+    typeof end?.toDate === "function"
+      ? end.toDate()
+      : new Date(end as unknown as string | number);
+  return endDate > new Date();
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [userData, setUserData] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [userDocConfirmed, setUserDocConfirmed] = useState(false);
   // At most one guest-payment claim attempt per signed-in uid per page load.
   const reconciledFor = useRef<string | null>(null);
 
@@ -43,6 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // across the switch would briefly show the new account as subscribed.
       if (user?.uid !== currentUid) {
         setUserData(null);
+        setUserDocConfirmed(false);
         if (user) setLoading(true);
       }
       currentUid = user?.uid ?? null;
@@ -66,6 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       unsubDoc = onSnapshot(
         userRef,
         async (userDoc) => {
+          if (!userDoc.metadata.fromCache) setUserDocConfirmed(true);
           if (userDoc.exists()) {
             setUserData({ uid: user.uid, ...userDoc.data() } as User);
             setLoading(false);
@@ -120,6 +144,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         (error) => {
           console.error("Failed to fetch user data:", error);
           setUserData(null);
+          // A dead listener says nothing about the subscription — don't let
+          // an earlier server snapshot vouch for the null we just set.
+          setUserDocConfirmed(false);
           setLoading(false);
         },
       );
@@ -136,16 +163,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // webhook may activate a sub on the throwaway anon user, but the purchase
     // only counts once it's claimed onto a real phone account at sign-in.
     if (firebaseUser?.isAnonymous) return false;
-    if (!userData?.subscription) return false;
-    if (userData.subscription.status !== "active") return false;
-    // endDate is a Firestore Timestamp in practice, but tolerate serialized
-    // string/number values from older writes.
-    const end = userData.subscription.endDate;
-    const endDate =
-      typeof end?.toDate === "function"
-        ? end.toDate()
-        : new Date(end as unknown as string | number);
-    return endDate > new Date();
+    return isActiveSubscription(userData?.subscription);
   }, [userData, firebaseUser]);
 
   // Claim any guest payment made against this account's verified phone.
@@ -193,7 +211,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ firebaseUser, userData, loading, hasActiveSubscription, signOut }}>
+    <AuthContext.Provider
+      value={{ firebaseUser, userData, loading, hasActiveSubscription, userDocConfirmed, signOut }}
+    >
       {children}
     </AuthContext.Provider>
   );

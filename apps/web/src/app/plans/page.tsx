@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   collection,
   query,
@@ -19,7 +18,6 @@ import { PaymentModal } from "@/components/payment-modal";
 import type { Plan } from "@bistar/shared";
 
 export default function PlansPage() {
-  const router = useRouter();
   const { firebaseUser, userData, loading: authLoading } = useAuth();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -237,7 +235,12 @@ export default function PlansPage() {
         onSuccess={() => {
           // On success the user's subscription is active server-side. Navigate
           // them home after a short beat so they see the success state first.
-          setTimeout(() => router.push("/"), 1500);
+          // A full load, not router.push: home sends anyone its live listener
+          // still thinks is unsubscribed back here, and after a UPI app switch
+          // that listener can lag the status poll by seconds.
+          setTimeout(() => {
+            window.location.href = "/";
+          }, 1500);
         }}
       />
     </div>

@@ -8,10 +8,10 @@ import {
   signInWithPopup,
   signInWithCustomToken,
 } from "firebase/auth";
-import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, getDoc, getDocFromServer, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@bistar/firebase-config";
 import { Button, Input } from "@bistar/ui";
-import { useAuth } from "@/lib/auth-context";
+import { useAuth, isActiveSubscription } from "@/lib/auth-context";
 import { normalizePhone, isCompletePhone } from "@/lib/phone";
 import { track } from "@/lib/pixel";
 import { reportAdEvent } from "@/lib/attribution";
@@ -39,7 +39,7 @@ declare global {
 
 export default function LoginPage() {
   const router = useRouter();
-  const { firebaseUser } = useAuth();
+  const { firebaseUser, loading: authLoading, hasActiveSubscription, userDocConfirmed } = useAuth();
   const [phone, setPhone] = useState("");
   const [countryCode, setCountryCode] = useState("+91");
   const [otpSent, setOtpSent] = useState(false);
@@ -79,15 +79,18 @@ export default function LoginPage() {
     }
   }, []);
 
-  // Send signed-in (non-anonymous) users home. Anonymous guest sessions stay on
-  // this page so they can verify their number, and the redirect is suppressed
-  // while a claim reconcile is in flight.
+  // Send signed-in (non-anonymous) users on: the /plans paywall to pick a pack
+  // if the server says they have no subscription, else home (whose gate, when
+  // browsing is gated, forwards them to /plans once the doc loads).
+  // This covers Google sign-in and an already-signed-in visitor; phone sign-in
+  // navigates from handleVerifyOtp, which holds `claiming` the whole way. Stays
+  // put for anonymous guest sessions (they're here to verify their number).
   useEffect(() => {
-    if (firebaseUser && !firebaseUser.isAnonymous && !claiming) {
+    if (firebaseUser && !firebaseUser.isAnonymous && !claiming && !authLoading) {
       setRedirecting(true);
-      router.replace("/");
+      router.replace(userDocConfirmed && !hasActiveSubscription ? "/plans" : "/");
     }
-  }, [firebaseUser, router, claiming]);
+  }, [firebaseUser, router, claiming, authLoading, hasActiveSubscription, userDocConfirmed]);
 
   useEffect(() => {
     fetch("/api/auth/msg91-config")
@@ -123,7 +126,9 @@ export default function LoginPage() {
     }
   }, [scriptLoaded, widgetCfg]);
 
-  if (redirecting || (firebaseUser && !firebaseUser.isAnonymous)) return null;
+  // While `claiming`, a just-verified phone user stays on the form: it shows
+  // "Verifying..." and, if they verified the wrong number, the error saying so.
+  if (redirecting || (firebaseUser && !firebaseUser.isAnonymous && !claiming)) return null;
 
   async function createUserDoc(
     uid: string,
@@ -167,7 +172,7 @@ export default function LoginPage() {
         },
         "google",
       );
-      router.push("/");
+      // Navigation happens in the redirect effect above, once the subscription is known.
     } catch (err) {
       console.error("Google sign-in error:", err);
       setError("Failed to sign in with Google. Please try again.");
@@ -271,10 +276,10 @@ export default function LoginPage() {
           }
           // Arrived to claim a purchase but nothing matched — almost always
           // because a DIFFERENT number was verified than the one paid with.
-          // Say so instead of dropping them on the home page still unsubscribed
-          // and assuming the payment vanished.
+          // Say so instead of dropping them on the paywall still unsubscribed
+          // and assuming the payment vanished. `claiming` stays set so the
+          // form (and this message) stays up for them to verify the right one.
           if (claimPhone && fullPhone !== claimPhone) {
-            setClaiming(false);
             setLoading(false);
             setError(
               `No purchase found for ${fullPhone}. Your payment was made with ${claimPhone} — ` +
@@ -282,9 +287,28 @@ export default function LoginPage() {
             );
             return;
           }
-          router.push("/");
+          // claimed 0 doesn't mean nothing was bought: the AuthProvider
+          // reconciles on sign-in too and usually wins the claim, and its grant
+          // may not have reached the live listener yet. Reconcile grants inside
+          // the same transaction that marks the claim, so once our call has
+          // answered the server copy is settled — decide home vs the /plans
+          // paywall from that. (If our call failed outright, theirs may still
+          // be running; /plans then flips to "active" when the grant lands.)
+          let dest = "/";
+          try {
+            const fresh = await getDocFromServer(doc(db(), "users", result.user.uid));
+            if (!isActiveSubscription(fresh.get("subscription"))) dest = "/plans";
+          } catch (readErr) {
+            // Unknown — home's gate forwards a non-subscriber once the doc loads.
+            console.error("Post-sign-in subscription check failed:", readErr);
+          }
+          setRedirecting(true);
+          router.replace(dest);
         } catch (err) {
-          setClaiming(false);
+          // Mid-claim, stay on the form so the error is seen: a retry after a
+          // wrong-number attempt is still signed in as that number, and
+          // releasing `claiming` would redirect them away from the message.
+          if (!claimPhone) setClaiming(false);
           setError(err instanceof Error ? err.message : "Failed to verify OTP");
         } finally {
           setLoading(false);
