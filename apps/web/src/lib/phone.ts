@@ -74,6 +74,19 @@ export function normalizePhone(countryCode: string, input: string): string {
 }
 
 /**
+ * Split an E.164 number back into a picker country code and national part,
+ * for prefilling a phone form. Longest code first, so "+971…" isn't read as
+ * "+97…" and "+91…" isn't read as "+9…".
+ */
+export function splitE164(e164: string): { countryCode: string; national: string } {
+  const codes = Object.keys(NATIONAL_DIGITS).sort((a, b) => b.length - a.length);
+  const cc = codes.find((c) => e164.startsWith(`+${c}`));
+  return cc
+    ? { countryCode: `+${cc}`, national: e164.slice(cc.length + 1) }
+    : { countryCode: "+91", national: e164.replace(/^\+/, "") };
+}
+
+/**
  * The shape the server enforces in /api/checkout/guest-init and
  * /api/auth/verify-otp. Exported so client and server agree on the format.
  */

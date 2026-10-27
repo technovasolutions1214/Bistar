@@ -11,7 +11,8 @@ import type { Plan } from "@bistar/shared";
 import { useAuth } from "@/lib/auth-context";
 import { track } from "@/lib/pixel";
 import { getAttribution, reportAdEvent } from "@/lib/attribution";
-import { normalizePhone, isCompletePhone } from "@/lib/phone";
+import { normalizePhone, isCompletePhone, splitE164 } from "@/lib/phone";
+import { guestCheckoutFor, rememberGuestCheckout } from "@/lib/guest-checkout";
 
 /**
  * Homepage quick-checkout: subscribe to the admin-configured DEFAULT plan
@@ -82,6 +83,18 @@ export function HomeQuickCheckout({
       cancelled = true;
     };
   }, [defaultPlanId]);
+
+  // Prefill the number this guest session already gave us (in an effect, so
+  // the server render and hydration agree on an empty box). Mid-checkout the
+  // new anonymous session isn't remembered yet, so this never overwrites a
+  // number being paid with.
+  useEffect(() => {
+    const remembered = guestCheckoutFor(firebaseUser);
+    if (!remembered) return;
+    const { countryCode: cc, national } = splitE164(remembered.phone);
+    setCountryCode(cc);
+    setPhone(national);
+  }, [firebaseUser]);
 
   const stopPolling = useCallback(() => {
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
@@ -220,6 +233,7 @@ export function HomeQuickCheckout({
           finish("error", gb.error || "Couldn't start checkout. Please try again.");
           return;
         }
+        rememberGuestCheckout({ phone: fullPhone, uid: u.uid, txnid: body.txnid, startedAt: Date.now() });
       }
 
       recordAttribution(token, body.txnid);

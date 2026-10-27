@@ -14,6 +14,7 @@ import { useAuth } from "@/lib/auth-context";
 import { track } from "@/lib/pixel";
 import { reportAdEvent } from "@/lib/attribution";
 import { PaymentModal } from "@/components/payment-modal";
+import { GuestPaymentResume } from "@/components/guest-payment-resume";
 
 import type { Plan } from "@bistar/shared";
 
@@ -65,8 +66,10 @@ export default function PlansPage() {
     setCheckoutPlan(plan);
   }
 
-  // Compute remaining days for the current subscription (if any)
-  const subscription = userData?.subscription;
+  // Compute remaining days for the current subscription (if any). A guest's
+  // anonymous session can hold one (the webhook grants it there), but it
+  // isn't theirs until they sign in to claim it — GuestPaymentResume says so.
+  const subscription = firebaseUser?.isAnonymous ? null : userData?.subscription;
   const remainingDays = (() => {
     if (!subscription || subscription.status !== "active") return 0;
     const endDate =
@@ -123,6 +126,8 @@ export default function PlansPage() {
           </div>
         </div>
       )}
+
+      <GuestPaymentResume />
 
       {error && (
         <div className="mb-8 max-w-md mx-auto p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-400 text-center">

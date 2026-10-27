@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { readGuestCheckout, rememberedFor } from "@/lib/guest-checkout";
 
 interface SubscriptionGateProps {
   requireGate: boolean;
@@ -17,25 +18,34 @@ interface SubscriptionGateProps {
 /**
  * A signed-in viewer without an active subscription has nothing to do on a
  * gated page but pick a pack, so send them straight to the /plans paywall.
- * Logged-out visitors and anonymous guest-checkout sessions are left alone:
- * they get the landing / paywall UI that lets them pay first and sign in after.
  *
- * Waits for the user doc from the server: a cache-only miss would otherwise
- * send a paying subscriber away, with nothing to bring them back.
+ * "Signed in" includes a guest who already gave us their phone on this device
+ * (an anonymous session with a remembered guest checkout): the navbar shows
+ * them an account, and the empty phone box would ask for the number again.
+ * Truly logged-out visitors, and anonymous sessions we hold no phone for, are
+ * left alone: they get the landing / paywall UI that lets them pay first.
+ *
+ * For a real account it waits for the user doc from the server: a cache-only
+ * miss would otherwise send a paying subscriber away, with nothing to bring
+ * them back. (Anonymous sessions are never subscribed.)
  *
  * Returns true while redirecting so the caller can render a placeholder.
  */
 export function usePaywallRedirect(requireGate: boolean, ready = true): boolean {
   const { firebaseUser, hasActiveSubscription, loading, userDocConfirmed } = useAuth();
   const router = useRouter();
+  // Read once per mount, deliberately: a guest who starts checking out on THIS
+  // page gets remembered mid-checkout, and must not be yanked to /plans away
+  // from their own payment window.
+  const [guest] = useState(readGuestCheckout);
+  const knownGuest = !!rememberedFor(guest, firebaseUser);
   const redirect =
     ready &&
     requireGate &&
     !loading &&
-    userDocConfirmed &&
     !!firebaseUser &&
-    !firebaseUser.isAnonymous &&
-    !hasActiveSubscription;
+    !hasActiveSubscription &&
+    (firebaseUser.isAnonymous ? knownGuest : userDocConfirmed);
 
   useEffect(() => {
     if (redirect) router.replace("/plans");

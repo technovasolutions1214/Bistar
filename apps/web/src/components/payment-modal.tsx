@@ -9,7 +9,8 @@ import type { Plan } from "@bistar/shared";
 import { useAuth } from "@/lib/auth-context";
 import { track } from "@/lib/pixel";
 import { getAttribution } from "@/lib/attribution";
-import { normalizePhone, isCompletePhone } from "@/lib/phone";
+import { normalizePhone, isCompletePhone, splitE164 } from "@/lib/phone";
+import { guestCheckoutFor, rememberGuestCheckout } from "@/lib/guest-checkout";
 
 type ModalStatus =
   | "collect" // guest: entering phone before payment
@@ -74,7 +75,18 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
     setPaymentUrl(null);
     setTxnId(null);
     setLoginFallback(false);
-    setPhone("");
+    // A guest who already gave us their number in this session isn't asked to
+    // type it again — prefill it (they can still change it). Read straight
+    // off auth, not as a dependency: re-running this reset when checkout signs
+    // in anonymously would throw the buyer back to the phone step mid-payment.
+    const remembered = guestCheckoutFor(auth().currentUser);
+    if (remembered) {
+      const { countryCode: cc, national } = splitE164(remembered.phone);
+      setCountryCode(cc);
+      setPhone(national);
+    } else {
+      setPhone("");
+    }
     resolvedRef.current = false;
     startedAtRef.current = Date.now();
     // Signed-in users go straight to checkout; guests collect a phone first.
@@ -251,6 +263,7 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
         finish("error", gb.error || "Couldn't start checkout. Please try again.");
         return;
       }
+      rememberGuestCheckout({ phone: fullPhone, uid: u.uid, txnid: body.txnid, startedAt: Date.now() });
 
       recordAttribution(token, body.txnid);
       setPaymentUrl(body.paymentUrl);

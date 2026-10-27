@@ -4,6 +4,7 @@ import { onAuthStateChanged, signOut as firebaseSignOut, type User as FirebaseUs
 import { doc, onSnapshot, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@bistar/firebase-config";
 import type { User } from "@bistar/shared";
+import { clearGuestCheckout } from "@/lib/guest-checkout";
 
 interface AuthContextType {
   firebaseUser: FirebaseUser | null;
@@ -66,8 +67,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (user?.uid !== currentUid) {
         setUserData(null);
         setUserDocConfirmed(false);
-        if (user) setLoading(true);
+        // Not for an anonymous session: guest checkout signs in anonymously
+        // in the middle of paying, and `loading` swaps pages for a skeleton
+        // or loader — which unmounted the very checkout box / payment modal
+        // that had just started, dropping the buyer back on an empty phone
+        // form while their payment went ahead unseen. An anonymous session
+        // is never subscribed, so there's nothing to wait for.
+        if (user && !user.isAnonymous) setLoading(true);
       }
+      // A real account is signed in: any guest checkout on this device has
+      // been claimed (or never will be from here), so stop prefilling it.
+      if (user && !user.isAnonymous) clearGuestCheckout();
       currentUid = user?.uid ?? null;
       setFirebaseUser(user);
 
@@ -206,6 +216,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [firebaseUser, loading, hasActiveSubscription]);
 
   const signOut = async () => {
+    clearGuestCheckout();
     await firebaseSignOut(auth());
     setUserData(null);
   };
