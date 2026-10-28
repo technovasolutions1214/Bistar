@@ -65,27 +65,65 @@ export async function POST(request: NextRequest) {
         const tx = txSnap.data()!;
         if (tx.status !== "success") return false; // not paid (yet) or failed
 
+        // Paid by this very account: the webhook already granted it here.
+        // Release the claim without granting the days a second time.
+        if (tx.userId === uid && !tx.activationError) {
+          t.update(claimDoc.ref, { claimedByUid: uid, claimedAt: new Date() });
+          return true;
+        }
+
         const planId = (claimPlanId ?? tx.planId) as string | undefined;
         if (!planId) return false;
 
+        // The window this payment bought, recorded by the webhook.
+        const grantedFrom: Date | undefined = tx.grantedFrom?.toDate?.();
+        const grantedUntil: Date | undefined = tx.grantedUntil?.toDate?.();
+
         const planSnap = await t.get(db.collection("plans").doc(planId));
-        if (!planSnap.exists) return false;
-        const plan = planSnap.data()!;
+        // Only a purchase without a recorded window needs the plan's length.
+        if (!planSnap.exists && !grantedUntil) return false;
+        const plan = planSnap.exists ? planSnap.data()! : {};
         const durationDays: number = plan.duration ?? 30;
 
         const userRef = db.collection("users").doc(uid);
         const userSnap = await t.get(userRef);
         const existingSub = userSnap.exists ? userSnap.data()?.subscription : null;
 
+        // The guest session the purchase was granted to. If support cancelled
+        // it there (a refund), there is nothing to move.
+        const payerSnap = await t.get(db.collection("users").doc(tx.userId as string));
+        const payerSub = payerSnap.exists ? payerSnap.data()?.subscription : null;
+        if (payerSub?.transactionId === txnid && payerSub?.status === "cancelled") {
+          t.update(claimDoc.ref, { claimedByUid: uid, claimedAt: new Date() });
+          return false;
+        }
+
+        // A guest has been watching on this purchase from the device they paid
+        // on since the moment it was granted — that session stays subscribed.
+        // So the account gets what is LEFT of the window it bought, not a fresh
+        // period from now; otherwise one payment would buy its days twice.
+        // Purchases from before the webhook recorded a window were sold under
+        // the old flow, which promised the full length from the claim — they
+        // keep that.
         const now = new Date();
+        const durationMs = durationDays * 24 * 60 * 60 * 1000;
+        let grantMs = durationMs;
+        if (grantedUntil instanceof Date) {
+          const from = grantedFrom instanceof Date ? grantedFrom.getTime() : grantedUntil.getTime() - durationMs;
+          grantMs = Math.max(0, grantedUntil.getTime() - Math.max(now.getTime(), from));
+        }
+        if (grantMs === 0) {
+          // All used up on the paying device: nothing left to move.
+          t.update(claimDoc.ref, { claimedByUid: uid, claimedAt: now });
+          return false;
+        }
+
         let startFrom = now;
         if (existingSub?.status === "active" && existingSub?.endDate?.toDate) {
           const currentEnd: Date = existingSub.endDate.toDate();
           if (currentEnd > now) startFrom = currentEnd;
         }
-        const newEndDate = new Date(
-          startFrom.getTime() + durationDays * 24 * 60 * 60 * 1000
-        );
+        const newEndDate = new Date(startFrom.getTime() + grantMs);
 
         // Writes.
         t.set(
@@ -93,7 +131,7 @@ export async function POST(request: NextRequest) {
           {
             subscription: {
               planId,
-              planName: plan.name ?? planId,
+              planName: plan.name ?? tx.planName ?? planId,
               status: "active",
               startDate: Timestamp.fromDate(now),
               endDate: Timestamp.fromDate(newEndDate),

@@ -69,10 +69,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUserDocConfirmed(false);
         // Not for an anonymous session: guest checkout signs in anonymously
         // in the middle of paying, and `loading` swaps pages for a skeleton
-        // or loader — which unmounted the very checkout box / payment modal
-        // that had just started, dropping the buyer back on an empty phone
-        // form while their payment went ahead unseen. An anonymous session
-        // is never subscribed, so there's nothing to wait for.
+        // or loader — which unmounted the very payment modal that had just
+        // started, dropping the buyer back on an empty phone form while their
+        // payment went ahead unseen. A session created mid-checkout has
+        // nothing to wait for; one restored on page load is still covered by
+        // the initial `loading` until its doc arrives.
         if (user && !user.isAnonymous) setLoading(true);
       }
       // A real account is signed in: any guest checkout on this device has
@@ -125,14 +126,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // subscription check, admin list) sees a consistent state.
           if (healing) return;
           healing = true;
+          // Profile fields only when Auth has them: guest checkout writes the
+          // number a guest paid with onto their (anonymous) doc server-side,
+          // and a merge of "" here could land just after it and wipe it.
           const fresh = {
             uid: user.uid,
             role: "user" as const,
             subscription: null,
-            displayName: user.displayName || user.phoneNumber || "",
+            ...(user.displayName || user.phoneNumber
+              ? { displayName: user.displayName || user.phoneNumber }
+              : {}),
             email: user.email || "",
             photoURL: user.photoURL || "",
-            phone: user.phoneNumber || "",
+            ...(user.phoneNumber ? { phone: user.phoneNumber } : {}),
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           };
@@ -168,32 +174,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const hasActiveSubscription = useMemo(() => {
-    // Anonymous (guest-checkout) sessions are never treated as subscribed. The
-    // webhook may activate a sub on the throwaway anon user, but the purchase
-    // only counts once it's claimed onto a real phone account at sign-in.
-    if (firebaseUser?.isAnonymous) return false;
-    return isActiveSubscription(userData?.subscription);
-  }, [userData, firebaseUser]);
+  // A guest who has paid is subscribed on the device they paid on: the PayU
+  // webhook grants the purchase to the anonymous session that made it, and
+  // that session simply stays signed in — no code to enter after paying. The
+  // same purchase is also recorded against the number they paid with
+  // (pendingClaims), so signing in with that number's OTP on any other device
+  // brings it along (reconcile, below).
+  //
+  // The anonymous session is never turned into the account for that number:
+  // the number was typed, not proven, and binding an account to it would let
+  // anyone who pays with someone else's number hold that person's account.
+  const hasActiveSubscription = useMemo(
+    () => isActiveSubscription(userData?.subscription),
+    [userData],
+  );
 
   // Claim any guest payment made against this account's verified phone.
   //
   // Guest checkout pays as an ANONYMOUS user, so the webhook activates the
-  // subscription on a throwaway uid; only /api/subscription/reconcile moves it
-  // onto the real account. That endpoint used to be called from exactly one
-  // place — the OTP submit handler — so a buyer who paid as a guest and then
-  // signed in with Google, or who was already signed in on another tab, or who
-  // came back days later, never received what they paid for.
+  // subscription on that device's session only; /api/subscription/reconcile is
+  // what puts it on the real account too. That endpoint used to be called
+  // from exactly one place — the OTP submit handler — so a buyer who paid as a
+  // guest and then signed in with Google, or who was already signed in on
+  // another tab, or who came back days later, never received what they paid
+  // for.
   //
   // Running it here covers every route into a signed-in session. It is safe to
   // repeat: the server matches only on the Firebase Auth phoneNumber (proven by
   // OTP) and stamps pendingClaims.claimedByUid on first grant, so it cannot
   // double-grant or be pointed at someone else's payment. The onSnapshot
   // listener above picks up the granted subscription with no reload.
+  //
+  // Also for an account that is already subscribed: a guest purchase claimed
+  // later passes on only what is left of it (the paying device has been
+  // watching on it meanwhile), so it should reach the account promptly.
   useEffect(() => {
     if (loading) return;
     if (!firebaseUser || firebaseUser.isAnonymous) return;
-    if (hasActiveSubscription) return;
     if (reconciledFor.current === firebaseUser.uid) return;
     reconciledFor.current = firebaseUser.uid;
 
@@ -213,7 +230,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error("Subscription reconcile failed:", err);
       }
     })();
-  }, [firebaseUser, loading, hasActiveSubscription]);
+  }, [firebaseUser, loading]);
 
   const signOut = async () => {
     clearGuestCheckout();

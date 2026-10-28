@@ -228,6 +228,13 @@ async function handleDelivery(
     const userRef = db.collection("users").doc(userId);
     const userSnap = await t.get(userRef);
     const existingSub = userSnap.exists ? userSnap.data()?.subscription : null;
+    // A guest purchase: the number it was made for (guest-init links it before
+    // PayU opens). The guest's session is signed in as that number from now on.
+    const claimSnap = await t.get(db.collection("pendingClaims").doc(txnid));
+    const guestPhone =
+      claimSnap.exists && claimSnap.get("anonUid") === userId
+        ? (claimSnap.get("phone") as string | undefined)
+        : undefined;
 
     // If user has an active subscription that ends later than 'now', extend
     // from its endDate.
@@ -248,12 +255,19 @@ async function handleDelivery(
       status: normalizedStatus,
       payuStatus: status,
       payuRawPayload: body,
+      // The access this payment bought: from the end of any earlier access
+      // it stacks on, to its own end. A guest watches on it from the device
+      // they paid on straight away, so claiming it later on their account
+      // (reconcile) only moves what is left of it.
+      grantedFrom: Timestamp.fromDate(startDate),
+      grantedUntil: Timestamp.fromDate(newEndDate),
       updatedAt: new Date(),
     });
 
     t.set(
       userRef,
       {
+        ...(guestPhone ? { phone: guestPhone, displayName: guestPhone } : {}),
         subscription: {
           planId,
           planName: plan.name ?? planId,

@@ -644,7 +644,7 @@ export default function SettingsPage() {
         <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-6 space-y-4">
           <h2 className="text-lg font-semibold">Checkout</h2>
           <div>
-            <label className="block text-sm font-medium mb-2">Default homepage plan</label>
+            <label className="block text-sm font-medium mb-2">Default homepage plan (not in use)</label>
             <select
               value={defaultPlanId}
               onChange={(e) => setDefaultPlanId(e.target.value)}
@@ -661,32 +661,12 @@ export default function SettingsPage() {
               ))}
             </select>
             <p className="text-xs text-[var(--muted)] mt-1">
-              Shown in the homepage quick-checkout (default plan + phone + inline payment, no page
-              leave). Leave as None to send visitors to the full plans page instead.
+              Not used at the moment: the homepage now asks for the visitor&apos;s number and then
+              shows every plan on the plans page, so no single plan is offered there.
             </p>
-            {(() => {
-              const lp = savedDefaultPlanId ? activePlans.find((p) => p.id === savedDefaultPlanId) : null;
-              const dirty = defaultPlanId !== savedDefaultPlanId;
-              return (
-                <p className="text-xs mt-2 text-[var(--muted)]">
-                  Live on homepage:{" "}
-                  {!savedDefaultPlanId ? (
-                    <span className="text-[var(--foreground)]">None — visitors go to the plans page</span>
-                  ) : lp ? (
-                    <span className="text-[var(--primary)] font-medium">
-                      {lp.name} — ₹{lp.price}
-                    </span>
-                  ) : (
-                    <span className="text-yellow-500">
-                      selected plan is inactive — visitors go to the plans page
-                    </span>
-                  )}
-                  {dirty && (
-                    <span className="text-[var(--primary)]"> · unsaved change, click Save</span>
-                  )}
-                </p>
-              );
-            })()}
+            {defaultPlanId !== savedDefaultPlanId && (
+              <p className="text-xs mt-2 text-[var(--primary)]">Unsaved change, click Save</p>
+            )}
           </div>
         </div>
 

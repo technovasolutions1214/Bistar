@@ -5,8 +5,8 @@
  * checkout (`pendingClaims.phone`) against the Firebase Auth `phoneNumber`
  * proven by OTP at sign-in. /api/subscription/reconcile does that with an exact
  * equality query, so the two call sites must produce byte-identical E.164 or a
- * completed purchase is silently stranded on the throwaway anonymous account —
- * with no error shown to anyone.
+ * completed purchase never reaches the buyer's real account — it stays on the
+ * one device they paid on, with no error shown to anyone.
  *
  * Checkout used to build `countryCode + digits` and login used
  * `countryCode + raw input`, neither stripping a leading trunk zero or a
@@ -84,6 +84,18 @@ export function splitE164(e164: string): { countryCode: string; national: string
   return cc
     ? { countryCode: `+${cc}`, national: e164.slice(cc.length + 1) }
     : { countryCode: "+91", national: e164.replace(/^\+/, "") };
+}
+
+/**
+ * A normalized number the way a customer reads their own: "+91 98765 43210".
+ * Display only — never compare or store this form.
+ */
+export function formatPhone(e164: string): string {
+  const { countryCode, national } = splitE164(e164);
+  if (countryCode === "+91" && national.length === 10) {
+    return `+91 ${national.slice(0, 5)} ${national.slice(5)}`;
+  }
+  return `${countryCode} ${national}`;
 }
 
 /**

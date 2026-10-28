@@ -105,17 +105,19 @@ export async function POST(request: NextRequest) {
     const amount = String(plan.price);
     const firstname = userId; // PayU's firstname field is used as our userId (matches cinestry template)
     const email = decodedToken.email || userData.email || "contact@cinestry.com";
-    // A guest (anonymous session) has no phone on file, so guest checkout sends
-    // the one it just collected — otherwise PayU gets the placeholder and asks
-    // the buyer again. Indian mobiles only: the last-10-digits rule below turns
-    // other countries' numbers into a wrong one. Phone is in neither PayU hash.
+    // Guest checkout (anonymous session) sends the number this payment is for —
+    // otherwise PayU gets the placeholder and asks the buyer again. A guest's
+    // doc holds the number of an EARLIER purchase, so it is never used for
+    // them. Indian mobiles only: the last-10-digits rule below turns other
+    // countries' numbers into a wrong one. Phone is in neither PayU hash.
+    const anonymous = decodedToken.firebase.sign_in_provider === "anonymous";
     const guestPhone =
-      decodedToken.firebase.sign_in_provider === "anonymous" &&
-      typeof body.phone === "string" &&
-      /^\+91[6-9]\d{9}$/.test(body.phone)
+      anonymous && typeof body.phone === "string" && /^\+91[6-9]\d{9}$/.test(body.phone)
         ? body.phone
         : "";
-    const rawPhone: string = userData.phone || decodedToken.phone_number || guestPhone;
+    const rawPhone: string = anonymous
+      ? guestPhone
+      : userData.phone || decodedToken.phone_number;
     const phone = rawPhone ? rawPhone.replace(/\D/g, "").slice(-10) : "0000000000";
     // No hardcoded fallback: the old default pointed at the retired
     // flix.cinestry.com status page, so a missing statusUrl would silently send

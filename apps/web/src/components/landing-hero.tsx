@@ -6,24 +6,21 @@ import Image from "next/image";
 import { collection, query, where, limit, getDocs } from "firebase/firestore";
 import { db } from "@bistar/firebase-config";
 import { useAuth } from "@/lib/auth-context";
-import { HomeQuickCheckout } from "@/components/home-quick-checkout";
+import { HomePhoneEntry } from "@/components/home-phone-entry";
 
 /**
  * Logged-out / non-subscribed landing shown by the home page's SubscriptionGate.
  *
  * Premium-dark / cinematic: warm near-black canvas, gold gradient wordmark,
- * a glowing gold "Subscribe" CTA, and a right→left looping poster marquee with
- * a gold-tinted edge mask. Background image is optional (drop one at
+ * the phone-number entry that starts checkout, and a right→left looping poster
+ * marquee with a gold-tinted edge mask. Background image is optional (drop one at
  * apps/web/public/landing-bg.jpg) — a layered warm gradient stands in until then.
  */
-export function LandingHero({
-  defaultPlanId,
-  landingBg,
-}: {
-  defaultPlanId?: string;
-  landingBg?: string;
-}) {
+export function LandingHero({ landingBg }: { landingBg?: string }) {
   const { firebaseUser } = useAuth();
+  // An anonymous session without a subscription hasn't paid for anything:
+  // to them this is still the signed-out landing, so keep the sign-in link.
+  const signedOut = !firebaseUser || firebaseUser.isAnonymous;
   const [posters, setPosters] = useState<string[]>([]);
 
   useEffect(() => {
@@ -47,20 +44,6 @@ export function LandingHero({
   }, []);
 
   const strip = posters.length > 0 ? [...posters, ...posters] : [];
-
-  // Standard CTA — also the fallback the quick-checkout shows when no valid
-  // default plan is configured.
-  const subscribeNow = (
-    <Link
-      href="/plans"
-      className="btn-gold inline-flex items-center gap-2 px-12 py-4 font-semibold rounded-xl text-lg"
-    >
-      Subscribe Now
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-      </svg>
-    </Link>
-  );
 
   return (
     <div className="relative w-full overflow-hidden min-h-[calc(100svh_-_4rem)]">
@@ -93,8 +76,8 @@ export function LandingHero({
       <div className="relative z-10 flex flex-col min-h-[calc(100svh_-_4rem)]">
         <div className="flex-1 flex flex-col items-center justify-start pt-44 sm:pt-56 text-center px-6">
           <div className="flex flex-col items-center gap-4 animate-fade-in">
-            <HomeQuickCheckout defaultPlanId={defaultPlanId ?? ""} fallback={subscribeNow} />
-            {!firebaseUser && (
+            <HomePhoneEntry />
+            {signedOut && (
               <Link
                 href="/auth/login"
                 className="text-sm text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"

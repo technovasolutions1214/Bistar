@@ -56,7 +56,7 @@ export const EVENT_CATALOG: EventDef[] = [
     key: "initiate_checkout",
     label: "Initiate checkout",
     what: "The visitor opened the payment window. Useful where purchase volume is too thin to train on.",
-    when: "Subscribe pressed on /plans or the homepage quick checkout.",
+    when: "A plan picked on /plans.",
     trust: "browser",
     defaultOn: false,
   },

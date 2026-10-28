@@ -16,36 +16,34 @@ interface SubscriptionGateProps {
 }
 
 /**
- * A signed-in viewer without an active subscription has nothing to do on a
- * gated page but pick a pack, so send them straight to the /plans paywall.
+ * A viewer without an active subscription who has already told us who they
+ * are has nothing to do on a gated page but pick a pack, so send them straight
+ * to the /plans paywall:
+ *   * a signed-in account, and
+ *   * a guest who already gave us their phone on this device (a remembered
+ *     number, with no session yet or under this anonymous session) — the home
+ *     box would only ask for the number again.
+ * Visitors we hold no number for are left alone: they get the landing /
+ * paywall UI that asks for it.
  *
- * "Signed in" includes a guest who already gave us their phone on this device
- * (an anonymous session with a remembered guest checkout): the navbar shows
- * them an account, and the empty phone box would ask for the number again.
- * Truly logged-out visitors, and anonymous sessions we hold no phone for, are
- * left alone: they get the landing / paywall UI that lets them pay first.
- *
- * For a real account it waits for the user doc from the server: a cache-only
- * miss would otherwise send a paying subscriber away, with nothing to bring
- * them back. (Anonymous sessions are never subscribed.)
+ * Whenever there is a session it waits for the user doc from the server: a
+ * cache-only miss would otherwise send a paying subscriber away, with nothing
+ * to bring them back. That includes a guest's anonymous session, which is
+ * subscribed on this device once it has paid.
  *
  * Returns true while redirecting so the caller can render a placeholder.
  */
 export function usePaywallRedirect(requireGate: boolean, ready = true): boolean {
   const { firebaseUser, hasActiveSubscription, loading, userDocConfirmed } = useAuth();
   const router = useRouter();
-  // Read once per mount, deliberately: a guest who starts checking out on THIS
-  // page gets remembered mid-checkout, and must not be yanked to /plans away
-  // from their own payment window.
+  // Read once per mount, deliberately: a guest who types their number on THIS
+  // page is sent on by the page itself, never yanked away mid-action.
   const [guest] = useState(readGuestCheckout);
   const knownGuest = !!rememberedFor(guest, firebaseUser);
-  const redirect =
-    ready &&
-    requireGate &&
-    !loading &&
-    !!firebaseUser &&
-    !hasActiveSubscription &&
-    (firebaseUser.isAnonymous ? knownGuest : userDocConfirmed);
+  const knownViewer = firebaseUser
+    ? userDocConfirmed && (!firebaseUser.isAnonymous || knownGuest)
+    : knownGuest;
+  const redirect = ready && requireGate && !loading && !hasActiveSubscription && knownViewer;
 
   useEffect(() => {
     if (redirect) router.replace("/plans");
@@ -119,7 +117,7 @@ export function SubscriptionGate({ requireGate, children, fallback, ready = true
           >
             Subscribe Now
           </Link>
-          {!firebaseUser && (
+          {(!firebaseUser || firebaseUser.isAnonymous) && (
             <Link
               href="/auth/login"
               className="text-sm text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"

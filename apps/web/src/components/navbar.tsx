@@ -1,10 +1,27 @@
 "use client";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import { formatPhone } from "@/lib/phone";
 import { useState, useEffect, useRef } from "react";
 
 export function Navbar() {
-  const { firebaseUser, loading, signOut } = useAuth();
+  const { firebaseUser, userData, hasActiveSubscription, loading, signOut } = useAuth();
+  // A guest is signed in once they've paid (on the device they paid on); an
+  // anonymous session that hasn't is a visitor who just started a checkout.
+  const signedIn = !!firebaseUser && (!firebaseUser.isAnonymous || hasActiveSubscription);
+
+  // A paid guest's session can't be signed back into — only the number it
+  // paid with can bring the subscription back, so say which one first.
+  function handleSignOut() {
+    if (firebaseUser?.isAnonymous && hasActiveSubscription) {
+      const number = userData?.phone ? formatPhone(userData.phone) : "the number you paid with";
+      const ok = window.confirm(
+        `Your subscription is on ${number}. To watch again after signing out, sign in with that number.`,
+      );
+      if (!ok) return;
+    }
+    signOut();
+  }
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -64,7 +81,7 @@ export function Navbar() {
 
               {!loading && (
                 <>
-                  {firebaseUser ? (
+                  {signedIn && firebaseUser ? (
                     <div ref={dropdownRef} className="relative hidden md:block">
                       <button
                         onClick={() => setMenuOpen(!menuOpen)}
@@ -91,7 +108,7 @@ export function Navbar() {
                             Subscription
                           </Link>
                           <button
-                            onClick={() => { signOut(); setMenuOpen(false); }}
+                            onClick={() => { handleSignOut(); setMenuOpen(false); }}
                             className="block w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-[var(--card-hover)] transition-colors"
                           >
                             Sign Out
@@ -186,9 +203,9 @@ export function Navbar() {
 
           {!loading && (
             <>
-              {firebaseUser ? (
+              {signedIn ? (
                 <button
-                  onClick={() => { signOut(); setMobileOpen(false); }}
+                  onClick={() => { handleSignOut(); setMobileOpen(false); }}
                   className="px-4 py-3 text-sm font-medium text-red-400 rounded-lg hover:bg-[var(--card)] transition-colors text-left"
                 >
                   Sign Out

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   collection,
   query,
@@ -15,15 +15,45 @@ import { track } from "@/lib/pixel";
 import { reportAdEvent } from "@/lib/attribution";
 import { PaymentModal } from "@/components/payment-modal";
 import { GuestPaymentResume } from "@/components/guest-payment-resume";
+import { NumberBar } from "@/components/number-bar";
+import { useRouter } from "next/navigation";
+import { deviceStorageWorks, guestCheckoutFor, rememberGuestPhone } from "@/lib/guest-checkout";
 
 import type { Plan } from "@bistar/shared";
 
 export default function PlansPage() {
-  const { firebaseUser, userData, loading: authLoading } = useAuth();
+  const { firebaseUser, userData, hasActiveSubscription, loading: authLoading } = useAuth();
+  const router = useRouter();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [checkoutPlan, setCheckoutPlan] = useState<Plan | null>(null);
+  // The number a guest's plan goes on — typed on the home page, here, or in
+  // the payment window — and whether the bar is open to change it.
+  const [guestPhone, setGuestPhone] = useState<string | null>(null);
+  const [editingNumber, setEditingNumber] = useState(false);
+  const draftPhoneRef = useRef<string | null>(null);
+  const onDraft = useCallback((phone: string | null) => {
+    draftPhoneRef.current = phone;
+  }, []);
+  const guest = !firebaseUser || firebaseUser.isAnonymous;
+
+  // In an effect: device storage, so the server render stays number-free. A
+  // guest who has paid is signed in as the number their payment was for (the
+  // webhook puts it on their doc), whatever was typed since; one who hasn't
+  // gets the number only while it's remembered (on a shared device it's
+  // someone else's otherwise).
+  useEffect(() => {
+    if (authLoading) return;
+    const remembered = guestCheckoutFor(firebaseUser)?.phone ?? null;
+    const paidGuest = !!firebaseUser?.isAnonymous && hasActiveSubscription;
+    setGuestPhone((paidGuest ? userData?.phone : null) || remembered);
+  }, [authLoading, firebaseUser, hasActiveSubscription, userData?.phone]);
+
+  function saveGuestPhone(phone: string) {
+    rememberGuestPhone(phone, firebaseUser?.isAnonymous ? firebaseUser.uid : undefined);
+    setGuestPhone(phone);
+  }
 
   useEffect(() => {
     async function fetchPlans() {
@@ -48,8 +78,14 @@ export default function PlansPage() {
   function handleSubscribe(plan: Plan) {
     // We no longer bounce logged-out users to /auth/login. The PaymentModal now
     // handles both cases: a signed-in user pays directly, while a guest pays
-    // first (anonymous session) and signs in afterwards to claim the purchase.
+    // under an anonymous session that simply stays signed in once it has paid.
+    // The window's header shows the number either way.
     setError(null);
+    // A complete number typed in the bar counts even if Save wasn't pressed.
+    if (guest && !hasActiveSubscription && draftPhoneRef.current) {
+      saveGuestPhone(draftPhoneRef.current);
+    }
+    setEditingNumber(false);
 
     track("InitiateCheckout", {
       content_ids: [plan.id],
@@ -66,10 +102,9 @@ export default function PlansPage() {
     setCheckoutPlan(plan);
   }
 
-  // Compute remaining days for the current subscription (if any). A guest's
-  // anonymous session can hold one (the webhook grants it there), but it
-  // isn't theirs until they sign in to claim it — GuestPaymentResume says so.
-  const subscription = firebaseUser?.isAnonymous ? null : userData?.subscription;
+  // Compute remaining days for the current subscription (if any) — a guest's
+  // too: the webhook grants their purchase to the session they paid with.
+  const subscription = userData?.subscription;
   const remainingDays = (() => {
     if (!subscription || subscription.status !== "active") return 0;
     const endDate =
@@ -97,6 +132,14 @@ export default function PlansPage() {
 
   return (
     <div className="min-h-screen pt-20 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto pb-20">
+      <NumberBar
+        guestPhone={guest ? guestPhone : null}
+        onGuestPhone={saveGuestPhone}
+        editing={editingNumber}
+        onEditingChange={setEditingNumber}
+        onDraft={onDraft}
+      />
+
       <div className="text-center mb-8">
         <p className="eyebrow mb-3">Choose your plan</p>
         <h1 className="text-3xl font-bold mb-3">
@@ -236,15 +279,26 @@ export default function PlansPage() {
       <PaymentModal
         open={!!checkoutPlan}
         plan={checkoutPlan}
+        guestPhone={guest ? guestPhone : null}
+        onGuestPhone={saveGuestPhone}
+        onChangeNumber={() => {
+          setCheckoutPlan(null);
+          setEditingNumber(true);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
         onClose={() => setCheckoutPlan(null)}
         onSuccess={() => {
-          // On success the user's subscription is active server-side. Navigate
-          // them home after a short beat so they see the success state first.
+          // On success the subscription is active server-side — a guest's on
+          // the session they paid with, which stays signed in. Navigate them
+          // home after a short beat so they see the success state first.
           // A full load, not router.push: home sends anyone its live listener
           // still thinks is unsubscribed back here, and after a UPI app switch
-          // that listener can lag the status poll by seconds.
+          // that listener can lag the status poll by seconds. Except where the
+          // browser keeps nothing: there a load would drop the guest's session
+          // seconds after telling them they're signed in.
           setTimeout(() => {
-            window.location.href = "/";
+            if (deviceStorageWorks()) window.location.href = "/";
+            else router.replace("/");
           }, 1500);
         }}
       />

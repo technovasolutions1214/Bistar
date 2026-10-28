@@ -14,6 +14,14 @@ import { rateLimit } from "@/lib/rate-limit";
  * transaction creation or the webhook. It only writes a server-only
  * `pendingClaims/{txnid}` document (clients can't read/write that collection —
  * there's no Firestore rule for it, so it's admin-SDK only).
+ *
+ * The link is made once, before payment, and is then fixed. It used to be a
+ * plain overwrite with no check on the transaction's status: the owner of a
+ * PAID transaction could re-link it to another number — resetting
+ * claimedByUid — and have reconcile grant the same payment again, as often as
+ * they liked. So: anonymous sessions only (a real account pays on itself),
+ * the transaction must still be pending, and a claim that has been released
+ * is never touched.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -30,6 +38,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid or expired token" }, { status: 401 });
     }
     const uid = decoded.uid;
+
+    // Guest checkout only. The token alone can't say so for sure (a session
+    // keeps its sign-in method in its tokens), so check the Auth record too.
+    const authUser = await getAdminAuth().getUser(uid);
+    if (decoded.firebase.sign_in_provider !== "anonymous" || authUser.providerData.length > 0) {
+      return NextResponse.json({ error: "Guest checkout only" }, { status: 403 });
+    }
 
     const { txnid, phone } = await request.json();
     if (!txnid || typeof txnid !== "string") {
@@ -49,27 +64,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // The transaction must exist and belong to the caller (the anon uid that
-    // the create route stamped). This stops anyone attaching a phone to a
-    // transaction that isn't theirs.
-    const txRef = getAdminDb().collection("transactions").doc(txnid);
-    const txSnap = await txRef.get();
-    if (!txSnap.exists) {
-      return NextResponse.json({ error: "Unknown transaction" }, { status: 404 });
-    }
-    const tx = txSnap.data()!;
-    if (tx.userId !== uid) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const db = getAdminDb();
+    const txRef = db.collection("transactions").doc(txnid);
+    const claimRef = db.collection("pendingClaims").doc(txnid);
 
-    await getAdminDb().collection("pendingClaims").doc(txnid).set({
-      txnid,
-      phone,
-      anonUid: uid,
-      planId: tx.planId ?? null,
-      claimedByUid: null,
-      createdAt: new Date(),
+    const refusal = await db.runTransaction(async (t) => {
+      const [txSnap, claimSnap] = await Promise.all([t.get(txRef), t.get(claimRef)]);
+      // The transaction must exist and belong to the caller (the anon uid that
+      // the create route stamped). This stops anyone attaching a phone to a
+      // transaction that isn't theirs.
+      if (!txSnap.exists) return { status: 404, error: "Unknown transaction" };
+      const tx = txSnap.data()!;
+      if (tx.userId !== uid) return { status: 403, error: "Forbidden" };
+      // Before payment only: once PayU has answered, the number is settled.
+      if (tx.status !== "pending" || claimSnap.get("claimedByUid")) {
+        return { status: 409, error: "This payment has already been processed" };
+      }
+
+      t.set(claimRef, {
+        txnid,
+        phone,
+        anonUid: uid,
+        planId: tx.planId ?? null,
+        claimedByUid: null,
+        createdAt: new Date(),
+      });
+      return null;
     });
+    if (refusal) {
+      return NextResponse.json({ error: refusal.error }, { status: refusal.status });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err) {

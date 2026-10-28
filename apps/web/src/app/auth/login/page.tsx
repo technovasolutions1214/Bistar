@@ -12,7 +12,7 @@ import { doc, setDoc, getDoc, getDocFromServer, serverTimestamp } from "firebase
 import { auth, db } from "@bistar/firebase-config";
 import { Button, Input } from "@bistar/ui";
 import { useAuth, isActiveSubscription } from "@/lib/auth-context";
-import { normalizePhone, isCompletePhone } from "@/lib/phone";
+import { normalizePhone, isCompletePhone, splitE164, formatPhone } from "@/lib/phone";
 import { track } from "@/lib/pixel";
 import { reportAdEvent } from "@/lib/attribution";
 
@@ -39,7 +39,8 @@ declare global {
 
 export default function LoginPage() {
   const router = useRouter();
-  const { firebaseUser, loading: authLoading, hasActiveSubscription, userDocConfirmed } = useAuth();
+  const { firebaseUser, userData, loading: authLoading, hasActiveSubscription, userDocConfirmed } =
+    useAuth();
   const [phone, setPhone] = useState("");
   const [countryCode, setCountryCode] = useState("+91");
   const [otpSent, setOtpSent] = useState(false);
@@ -78,6 +79,21 @@ export default function LoginPage() {
       setPhone(cp.replace(/^\+/, ""));
     }
   }, []);
+
+  // A guest who has paid on this device and comes to sign in is in the same
+  // spot as one arriving from the checkout handoff: their purchase is on the
+  // number they paid with (the webhook put it on their doc). Verify that one —
+  // and no Google, which would swap this session for an account with no claim
+  // on the purchase.
+  useEffect(() => {
+    if (claimPhone || !firebaseUser?.isAnonymous || !hasActiveSubscription) return;
+    const paidWith = userData?.phone;
+    if (!paidWith) return;
+    setClaimPhone(paidWith);
+    const { countryCode: cc, national } = splitE164(paidWith);
+    setCountryCode(cc);
+    setPhone(national);
+  }, [claimPhone, firebaseUser, hasActiveSubscription, userData?.phone]);
 
   // Send signed-in (non-anonymous) users on: the /plans paywall to pick a pack
   // if the server says they have no subscription, else home (whose gate, when
@@ -343,7 +359,7 @@ export default function LoginPage() {
           <p className="font-medium text-[var(--foreground)] mb-1">Activate your purchase</p>
           <p className="text-[var(--muted)]">
             Verify{" "}
-            <span className="font-medium text-[var(--foreground)]">{claimPhone}</span> — the number you
+            <span className="font-medium text-[var(--foreground)]">{formatPhone(claimPhone)}</span> — the number you
             paid with — to add the subscription to your account.
           </p>
         </div>

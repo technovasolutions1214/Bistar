@@ -9,15 +9,14 @@ import type { Plan } from "@bistar/shared";
 import { useAuth } from "@/lib/auth-context";
 import { track } from "@/lib/pixel";
 import { getAttribution } from "@/lib/attribution";
-import { normalizePhone, isCompletePhone, splitE164 } from "@/lib/phone";
-import { guestCheckoutFor, rememberGuestCheckout } from "@/lib/guest-checkout";
+import { normalizePhone, isCompletePhone, splitE164, formatPhone } from "@/lib/phone";
+import { rememberGuestCheckout, settleGuestCheckout } from "@/lib/guest-checkout";
 
 type ModalStatus =
-  | "collect" // guest: entering phone before payment
+  | "collect" // guest with no number yet: entering it before payment
   | "opening" // creating the transaction
   | "waiting" // PayU iframe shown, polling
-  | "success" // signed-in user: subscription active
-  | "claim" // guest: paid, must sign in to activate
+  | "success" // paid: subscription active (a guest on this device)
   | "failed"
   | "timeout"
   | "error";
@@ -27,6 +26,16 @@ interface PaymentModalProps {
   plan: Plan | null;
   onClose: () => void;
   onSuccess?: () => void;
+  /**
+   * Guest checkout: the number this purchase is for (E.164), when the guest
+   * has already given it. Read once as the window opens — the header, PayU
+   * and the claim all use that one value.
+   */
+  guestPhone?: string | null;
+  /** A guest typed their number in this window's own phone step. */
+  onGuestPhone?: (phone: string) => void;
+  /** A guest wants to correct the number in the header; the window closes. */
+  onChangeNumber?: () => void;
 }
 
 // Poll the transaction doc — updated by the PayU S2S webhook at
@@ -39,8 +48,16 @@ const MAX_POLL_DURATION_MS = 20 * 60 * 1000;
 
 const COUNTRY_CODES = ["+91", "+1", "+44", "+61", "+971"];
 
-export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalProps) {
-  const { firebaseUser } = useAuth();
+export function PaymentModal({
+  open,
+  plan,
+  onClose,
+  onSuccess,
+  guestPhone,
+  onGuestPhone,
+  onChangeNumber,
+}: PaymentModalProps) {
+  const { firebaseUser, userData, hasActiveSubscription } = useAuth();
   const router = useRouter();
   const [status, setStatus] = useState<ModalStatus>("opening");
   const [message, setMessage] = useState("");
@@ -52,12 +69,25 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
   // Guest phone entry
   const [countryCode, setCountryCode] = useState("+91");
   const [phone, setPhone] = useState("");
+  // The guest number this checkout is for — the header, PayU and the claim.
+  const [payingPhone, setPayingPhone] = useState("");
 
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startedAtRef = useRef<number>(0);
   const resolvedRef = useRef(false);
   const isGuestRef = useRef(false);
-  const claimPhoneRef = useRef("");
+  const payingPhoneRef = useRef("");
+  // One per checkout attempt (each open, each retry). Work still in flight
+  // from an earlier attempt checks it before touching the window.
+  const attemptRef = useRef(0);
+  // The attempt that should start a checkout, and the one that has. Decided
+  // where the attempt begins rather than read off `status`: on the render
+  // that opens the window, `status` still holds whatever the last checkout
+  // left there.
+  const armedForRef = useRef(-1);
+  const startedForRef = useRef(-1);
+  // Whether the session was already subscribed when the window opened.
+  const subscribedAtOpenRef = useRef(false);
 
   // A "real" user is signed in and NOT anonymous. Anonymous = mid guest checkout.
   const realUser = !!firebaseUser && !firebaseUser.isAnonymous;
@@ -70,34 +100,54 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
   // Reset everything whenever the modal reopens.
   useEffect(() => {
     if (!open) return;
+    attemptRef.current += 1;
     setMessage("");
     setError("");
     setPaymentUrl(null);
     setTxnId(null);
     setLoginFallback(false);
-    // A guest who already gave us their number in this session isn't asked to
-    // type it again — prefill it (they can still change it). Read straight
-    // off auth, not as a dependency: re-running this reset when checkout signs
-    // in anonymously would throw the buyer back to the phone step mid-payment.
-    const remembered = guestCheckoutFor(auth().currentUser);
-    if (remembered) {
-      const { countryCode: cc, national } = splitE164(remembered.phone);
+    resolvedRef.current = false;
+    startedAtRef.current = Date.now();
+    // Signed-in users and guests whose number we have go straight to
+    // checkout; a guest we have no number for gives it first. `guestPhone` is
+    // read here, not as a dependency: it changes when the guest types their
+    // number in this very window, and re-running this reset would throw them
+    // back to the phone step mid-payment.
+    isGuestRef.current = !realUser;
+    subscribedAtOpenRef.current = hasActiveSubscription;
+    const known = realUser ? "" : guestPhone || "";
+    payingPhoneRef.current = known;
+    setPayingPhone(known);
+    if (known) {
+      const { countryCode: cc, national } = splitE164(known);
       setCountryCode(cc);
       setPhone(national);
     } else {
       setPhone("");
     }
-    resolvedRef.current = false;
-    startedAtRef.current = Date.now();
-    // Signed-in users go straight to checkout; guests collect a phone first.
-    isGuestRef.current = !realUser;
-    setStatus(realUser ? "opening" : "collect");
+    armedForRef.current = realUser || known ? attemptRef.current : -1;
+    setStatus(realUser || known ? "opening" : "collect");
   }, [open, realUser]);
 
   useEffect(() => {
-    if (!open) stopPolling();
+    if (!open) {
+      // Closing ends this attempt: a status poll still in flight must not
+      // reschedule itself or act on a window that's gone.
+      attemptRef.current += 1;
+      stopPolling();
+    }
     return () => stopPolling();
   }, [open, stopPolling]);
+
+  // Leaving the page (Back mid-checkout) ends the attempt too: a create or a
+  // status poll still in flight must not carry on for a window that's gone.
+  useEffect(
+    () => () => {
+      attemptRef.current += 1;
+      stopPolling();
+    },
+    [stopPolling],
+  );
 
   const finish = useCallback(
     (next: ModalStatus, msg: string) => {
@@ -111,8 +161,8 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
   );
 
   const pollOnce = useCallback(
-    async (id: string) => {
-      if (resolvedRef.current) return;
+    async (id: string, attempt: number) => {
+      if (resolvedRef.current || attemptRef.current !== attempt) return;
       const u = auth().currentUser;
       if (!u) return;
       if (Date.now() - startedAtRef.current > MAX_POLL_DURATION_MS) {
@@ -129,7 +179,7 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
           cache: "no-store",
         });
         if (!res.ok) {
-          pollTimerRef.current = setTimeout(() => pollOnce(id), POLL_INTERVAL_MS);
+          pollTimerRef.current = setTimeout(() => pollOnce(id, attempt), POLL_INTERVAL_MS);
           return;
         }
         const body = (await res.json()) as {
@@ -138,6 +188,7 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
           currency?: string;
           planId?: string;
         };
+        if (attemptRef.current !== attempt) return;
         if (body.status === "success") {
           // Fire Purchase with eventID=txnid so it dedupes against the
           // server-side CAPI Purchase the webhook trigger sends.
@@ -150,72 +201,115 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
             },
             { eventID: id },
           );
-          if (isGuestRef.current) {
-            // Guest must sign in to bind the purchase to a real account.
-            finish("claim", "");
-          } else {
-            finish("success", "Your subscription is now active.");
-            onSuccess?.();
-          }
+          // A guest is now subscribed on this device — the anonymous session
+          // that paid holds the purchase and stays signed in. Nothing to enter.
+          if (isGuestRef.current) settleGuestCheckout(id);
+          finish(
+            "success",
+            isGuestRef.current
+              ? `You're signed in as ${formatPhone(payingPhoneRef.current)}. To watch on another ` +
+                  "phone or browser, sign in there with this number."
+              : "Your subscription is now active.",
+          );
+          onSuccess?.();
           return;
         }
         if (body.status === "failed") {
           finish("failed", "Payment didn't go through. Please try again or contact support.");
           return;
         }
-        pollTimerRef.current = setTimeout(() => pollOnce(id), POLL_INTERVAL_MS);
+        pollTimerRef.current = setTimeout(() => pollOnce(id, attempt), POLL_INTERVAL_MS);
       } catch {
-        pollTimerRef.current = setTimeout(() => pollOnce(id), POLL_INTERVAL_MS);
+        pollTimerRef.current = setTimeout(() => pollOnce(id, attempt), POLL_INTERVAL_MS);
       }
     },
     [finish, onSuccess],
   );
 
-  // Signed-in checkout: auto-start create once the modal opens for a real user.
-  useEffect(() => {
-    if (!open || !plan) return;
-    if (status !== "opening" || isGuestRef.current) return;
-    let cancelled = false;
-
-    (async () => {
+  // Create the transaction and open PayU. Signed-in users pay on their
+  // account; a guest pays under an anonymous session (made here if there
+  // isn't one), and the number is linked to the transaction BEFORE PayU is
+  // shown, so a guest payment can always be found by the number it was for.
+  const startCheckout = useCallback(
+    async (attempt: number) => {
+      if (!plan) return;
+      const live = () => attemptRef.current === attempt;
+      const guest = isGuestRef.current;
+      const fullPhone = payingPhoneRef.current;
       try {
-        const u = auth().currentUser;
+        let u = auth().currentUser;
+        if (!u && guest) {
+          const cred = await signInAnonymously(auth());
+          u = cred.user;
+        }
         if (!u) {
-          finish("error", "Please sign in again.");
+          if (live()) finish("error", "Please sign in again.");
           return;
         }
         const token = await u.getIdToken();
+
+        // Guests pass their phone on so PayU prefills it instead of asking again.
         const res = await fetch("/api/payment/payu/create", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ planId: plan.id }),
+          body: JSON.stringify(guest ? { planId: plan.id, phone: fullPhone } : { planId: plan.id }),
         });
         const body = await res.json();
-        if (cancelled) return;
+        if (!live()) return;
         if (!res.ok || !body.paymentUrl) {
           finish("error", body.error || "Couldn't start the payment. Please try again.");
           return;
         }
+
+        if (guest) {
+          // create() only made a PENDING transaction, so aborting here costs
+          // the buyer nothing.
+          const gi = await fetch("/api/checkout/guest-init", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ txnid: body.txnid, phone: fullPhone }),
+          });
+          if (!live()) return;
+          if (!gi.ok) {
+            const gb = await gi.json().catch(() => ({}));
+            finish("error", gb.error || "Couldn't start checkout. Please try again.");
+            return;
+          }
+          rememberGuestCheckout({ phone: fullPhone, uid: u.uid, txnid: body.txnid, startedAt: Date.now() });
+        }
+
         recordAttribution(token, body.txnid);
         setPaymentUrl(body.paymentUrl);
         setTxnId(body.txnid);
         setStatus("waiting");
-        pollTimerRef.current = setTimeout(() => pollOnce(body.txnid), POLL_INTERVAL_MS);
+        pollTimerRef.current = setTimeout(() => pollOnce(body.txnid, attempt), POLL_INTERVAL_MS);
       } catch (err) {
-        if (!cancelled) {
+        if (!live()) return;
+        const code = (err as { code?: string })?.code;
+        if (code === "auth/operation-not-allowed" || code === "auth/admin-restricted-operation") {
+          // Anonymous Auth not enabled in the project — degrade gracefully to the
+          // old sign-in-first flow instead of breaking checkout.
+          setLoginFallback(true);
+          finish("error", "Guest checkout isn't available right now — please sign in to continue.");
+        } else {
           finish("error", err instanceof Error ? err.message : "Couldn't start the payment.");
         }
       }
-    })();
+    },
+    [plan, finish, pollOnce],
+  );
 
-    return () => {
-      cancelled = true;
-    };
-  }, [open, plan, status, finish, pollOnce]);
+  // Start once per attempt (an effect can run twice for one in development).
+  useEffect(() => {
+    if (!open || !plan || status !== "opening") return;
+    const attempt = attemptRef.current;
+    if (armedForRef.current !== attempt || startedForRef.current === attempt) return;
+    startedForRef.current = attempt;
+    void startCheckout(attempt);
+  }, [open, plan, status, startCheckout]);
 
-  // Guest checkout: triggered by the phone-form submit.
-  const startGuestCheckout = useCallback(async () => {
-    if (!plan) return;
+  // Guest with no number yet: the phone-form submit.
+  function submitGuestPhone() {
     // Must match what /auth/login sends to verify-otp — reconcile compares
     // these two strings for exact equality to release the purchase.
     const fullPhone = normalizePhone(countryCode, phone);
@@ -223,65 +317,13 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
       setError("Please enter a valid phone number.");
       return;
     }
-    claimPhoneRef.current = fullPhone;
-    isGuestRef.current = true;
     setError("");
-    setMessage("");
+    payingPhoneRef.current = fullPhone;
+    setPayingPhone(fullPhone);
+    onGuestPhone?.(fullPhone);
+    armedForRef.current = attemptRef.current;
     setStatus("opening");
-
-    try {
-      // Reuse an existing anonymous session if present, otherwise create one.
-      let u = auth().currentUser;
-      if (!u) {
-        const cred = await signInAnonymously(auth());
-        u = cred.user;
-      }
-      const token = await u.getIdToken();
-
-      // Pass the phone on so PayU prefills it instead of asking a second time.
-      const res = await fetch("/api/payment/payu/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ planId: plan.id, phone: fullPhone }),
-      });
-      const body = await res.json();
-      if (!res.ok || !body.paymentUrl) {
-        finish("error", body.error || "Couldn't start the payment. Please try again.");
-        return;
-      }
-
-      // Record the phone↔txn link BEFORE showing PayU, so we never take a
-      // payment we can't later attribute to a sign-in. create() only made a
-      // PENDING transaction, so aborting here costs the user nothing.
-      const gi = await fetch("/api/checkout/guest-init", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ txnid: body.txnid, phone: fullPhone }),
-      });
-      if (!gi.ok) {
-        const gb = await gi.json().catch(() => ({}));
-        finish("error", gb.error || "Couldn't start checkout. Please try again.");
-        return;
-      }
-      rememberGuestCheckout({ phone: fullPhone, uid: u.uid, txnid: body.txnid, startedAt: Date.now() });
-
-      recordAttribution(token, body.txnid);
-      setPaymentUrl(body.paymentUrl);
-      setTxnId(body.txnid);
-      setStatus("waiting");
-      pollTimerRef.current = setTimeout(() => pollOnce(body.txnid), POLL_INTERVAL_MS);
-    } catch (err) {
-      const code = (err as { code?: string })?.code;
-      if (code === "auth/operation-not-allowed" || code === "auth/admin-restricted-operation") {
-        // Anonymous Auth not enabled in the project — degrade gracefully to the
-        // old sign-in-first flow instead of breaking checkout.
-        setLoginFallback(true);
-        finish("error", "Guest checkout isn't available right now — please sign in to continue.");
-      } else {
-        finish("error", err instanceof Error ? err.message : "Couldn't start the payment.");
-      }
-    }
-  }, [plan, phone, countryCode, finish, pollOnce]);
+  }
 
   if (!open) return null;
 
@@ -289,22 +331,71 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
   const showIframe = status === "waiting" && !!paymentUrl;
 
   function goToLogin() {
-    const q = claimPhoneRef.current
-      ? `?claimPhone=${encodeURIComponent(claimPhoneRef.current)}`
-      : "";
-    router.push(`/auth/login${q}`);
+    router.push("/auth/login");
   }
 
   function retry() {
+    attemptRef.current += 1;
     resolvedRef.current = false;
+    stopPolling();
     setPaymentUrl(null);
     setTxnId(null);
     setMessage("");
     setError("");
     setLoginFallback(false);
     startedAtRef.current = Date.now();
-    setStatus(isGuestRef.current ? "collect" : "opening");
+    const start = !isGuestRef.current || !!payingPhoneRef.current;
+    armedForRef.current = start ? attemptRef.current : -1;
+    setStatus(start ? "opening" : "collect");
   }
+
+  // The number is the header so the buyer can check it; if it's wrong, let
+  // them out — even from the payment page, as long as they haven't paid.
+  function changeNumber() {
+    if (
+      status === "waiting" &&
+      !window.confirm("Only change the number if you haven't paid yet. Close this payment?")
+    ) {
+      return;
+    }
+    attemptRef.current += 1;
+    stopPolling();
+    onChangeNumber?.();
+  }
+
+  // Who this purchase is for, as the header: the guest's number, or the
+  // signed-in account (its number, else its email).
+  const accountPhone = firebaseUser?.phoneNumber || userData?.phone || "";
+  const headerTitle = realUser
+    ? accountPhone
+      ? formatPhone(accountPhone)
+      : firebaseUser?.email || userData?.email || "Your account"
+    : payingPhone
+      ? formatPhone(payingPhone)
+      : "Enter your mobile number";
+  // Not for a guest who has already paid: they are signed in as that number.
+  // An earlier payment — from a window that was closed, or a tab that
+  // reloaded on the way back from a UPI app — can land while this one is
+  // open. Say so, so the guest doesn't pay a second time without meaning to.
+  const earlierPaymentLanded =
+    !realUser &&
+    (status === "opening" || status === "waiting") &&
+    hasActiveSubscription &&
+    !subscribedAtOpenRef.current &&
+    userData?.subscription?.transactionId !== txnId;
+  function closeAfterEarlierPayment() {
+    attemptRef.current += 1;
+    stopPolling();
+    onClose();
+  }
+
+  const canChangeNumber =
+    !realUser &&
+    !hasActiveSubscription &&
+    !!payingPhone &&
+    !!onChangeNumber &&
+    status !== "success" &&
+    status !== "collect";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6">
@@ -313,9 +404,20 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
         onClick={dismissable ? onClose : undefined}
       />
       <div className="relative w-full max-w-lg bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between shrink-0">
-          <div>
-            <h2 className="text-lg font-semibold">Complete your payment</h2>
+        <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between gap-3 shrink-0">
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-wider text-[var(--muted)]">Subscription for</p>
+            <div className="flex items-baseline gap-3">
+              <h2 className="text-lg font-semibold truncate">{headerTitle}</h2>
+              {canChangeNumber && (
+                <button
+                  onClick={changeNumber}
+                  className="text-xs text-[var(--muted)] hover:text-[var(--foreground)] underline underline-offset-2 shrink-0"
+                >
+                  Change
+                </button>
+              )}
+            </div>
             {plan && (
               <p className="text-xs text-[var(--muted)] mt-0.5">
                 {plan.name} · ₹{plan.price}
@@ -333,6 +435,18 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
             </svg>
           </button>
         </div>
+
+        {earlierPaymentLanded && (
+          <div className="px-6 py-3 border-b border-[var(--border)] bg-green-500/10 flex items-center justify-between gap-3 shrink-0">
+            <p className="text-sm">
+              Your earlier payment went through — you&apos;re subscribed. You don&apos;t need to pay
+              again.
+            </p>
+            <Button onClick={closeAfterEarlierPayment} className="shrink-0">
+              Close
+            </Button>
+          </div>
+        )}
 
         <div className="flex-1 overflow-hidden">
           {showIframe && (
@@ -360,8 +474,8 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
           {status === "collect" && (
             <div className="px-6 py-8 space-y-4">
               <p className="text-sm text-[var(--muted)]">
-                Enter your phone number to continue. After payment you&apos;ll sign in with this
-                number to activate your subscription — even if you come back later.
+                Your subscription goes on this number. To watch on another device later, sign in
+                with it.
               </p>
               {error && (
                 <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-400">
@@ -389,7 +503,7 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
                 />
               </div>
               <Button
-                onClick={startGuestCheckout}
+                onClick={submitGuestPhone}
                 className="w-full bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-medium py-3 rounded-lg transition-colors"
               >
                 Continue to payment
@@ -397,25 +511,7 @@ export function PaymentModal({ open, plan, onClose, onSuccess }: PaymentModalPro
             </div>
           )}
 
-          {/* Guest: paid, now must sign in to bind the purchase. */}
-          {status === "claim" && (
-            <div className="px-6 py-8 text-center space-y-4 min-h-[240px] flex flex-col items-center justify-center">
-              <StatusGraphic status="success" />
-              <div>
-                <p className="text-base font-semibold mb-1">Payment successful</p>
-                <p className="text-sm text-[var(--muted)]">
-                  Sign in with{" "}
-                  <span className="font-medium text-[var(--foreground)]">{claimPhoneRef.current}</span>{" "}
-                  to activate your subscription on your account.
-                </p>
-              </div>
-              <div className="pt-2">
-                <Button onClick={goToLogin}>Sign in to activate</Button>
-              </div>
-            </div>
-          )}
-
-          {!showIframe && status !== "collect" && status !== "claim" && (
+          {!showIframe && status !== "collect" && (
             <div className="px-6 py-8 text-center space-y-4 min-h-[240px] flex flex-col items-center justify-center">
               <StatusGraphic status={status} />
               <div>
